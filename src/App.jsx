@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 
 // ─── Constants ────────────────────────────────────────────────────
 const S = {
@@ -214,22 +214,61 @@ const Header = ({ title, sub, back, onBack, right, search, onSearch, searchPh })
 // ─── Bottom Nav ───────────────────────────────────────────────────
 const BottomNav = ({ tab, setTab, totalUnread }) => {
   const tabs = [
-    { id:TAB.HOME,      icon:"⊞", label:"Home"      },
-    { id:TAB.CLIENTS,   icon:"◎", label:"Clients"   },
-    { id:TAB.MESSAGING, icon:"✉", label:"Messages", badge: totalUnread },
-    { id:TAB.DOCUMENTS, icon:"⊟", label:"Documents" },
+    { id:TAB.HOME,      icon:"home", label:"Home"      },
+    { id:TAB.CLIENTS,   icon:"clients", label:"Clients"   },
+    { id:TAB.MESSAGING, icon:"messages", label:"Messages", badge: totalUnread },
+    { id:TAB.DOCUMENTS, icon:"documents", label:"Documents" },
   ];
+  const NavIcon = ({ name, active }) => {
+    const color = active ? "#1a1a1a" : "#888888";
+    const common = { width:18, height:18, viewBox:"0 0 24 24", fill:"none", stroke:color, strokeWidth:1.8, strokeLinecap:"round", strokeLinejoin:"round" };
+    if (name === "home") {
+      return (
+        <svg {...common}>
+          <path d="M3 10.5L12 3l9 7.5" />
+          <path d="M5 10.5V20h14v-9.5" />
+          <path d="M9 20v-6h6v6" />
+        </svg>
+      );
+    }
+    if (name === "clients") {
+      return (
+        <svg {...common}>
+          <circle cx="9" cy="8" r="3" />
+          <path d="M3.5 19c0-3.3 3.2-5.2 5.5-5.2s5.5 1.9 5.5 5.2" />
+          <circle cx="17" cy="9" r="2.5" />
+          <path d="M14.5 19c.2-2 1.8-3.4 3.8-3.4 1 0 2 .4 2.7 1.1" />
+        </svg>
+      );
+    }
+    if (name === "messages") {
+      return (
+        <svg {...common}>
+          <path d="M4 5h16a3 3 0 0 1 3 3v7a3 3 0 0 1-3 3H9l-5 4v-4H4a3 3 0 0 1-3-3V8a3 3 0 0 1 3-3z" />
+        </svg>
+      );
+    }
+    return (
+      <svg {...common}>
+        <path d="M6 3h9l4 4v14H6z" />
+        <path d="M15 3v4h4" />
+        <path d="M8.5 12h7" />
+        <path d="M8.5 16h7" />
+      </svg>
+    );
+  };
   return (
     <div style={{
-      position:"absolute", bottom:16, left:20, right:20,
+      position:"absolute", bottom:16, left:17, right:17,
       display:"flex",
+      gap:0,
       background:"rgba(255,255,255,0.45)",
       backdropFilter:"blur(20px)",
       WebkitBackdropFilter:"blur(20px)",
-      borderRadius:26,
+      borderRadius:20,
       border:"1px solid rgba(255,255,255,0.7)",
       boxShadow:"0 8px 32px rgba(0,0,0,0.12), 0 1px 0 rgba(255,255,255,0.8) inset",
-      padding:"6px 4px 6px",
+      padding:"2px 0",
       zIndex:50,
     }}>
       {tabs.map(t => {
@@ -237,7 +276,7 @@ const BottomNav = ({ tab, setTab, totalUnread }) => {
         return (
           <button key={t.id} onClick={() => setTab(t.id)} style={{
             flex:1, border:"none", background:"none", cursor:"pointer",
-            padding:"6px 0 4px", display:"flex", flexDirection:"column",
+            padding:"9px 0 7px", display:"flex", flexDirection:"column",
             alignItems:"center", gap:3, position:"relative", borderRadius:20,
           }}>
             {/* Active pill bg */}
@@ -250,8 +289,8 @@ const BottomNav = ({ tab, setTab, totalUnread }) => {
                 border:"1px solid rgba(255,255,255,0.9)",
               }} />
             )}
-            <span style={{ fontSize:16, color: active ? "#1a1a1a" : "#888888", position:"relative", zIndex:1, lineHeight:1 }}>{t.icon}</span>
-            <span style={{ fontSize:9, fontWeight: active ? 700 : 400, color: active ? "#1a1a1a" : "#888888", position:"relative", zIndex:1 }}>{t.label}</span>
+            <span style={{ position:"relative", zIndex:1, lineHeight:1 }}><NavIcon name={t.icon} active={active} /></span>
+            <span style={{ fontSize:10, fontWeight: active ? 700 : 400, color: active ? "#1a1a1a" : "#888888", position:"relative", zIndex:1 }}>{t.label}</span>
             {t.badge > 0 && (
               <div style={{
                 position:"absolute", top:2, right:"50%", transform:"translateX(12px)",
@@ -274,6 +313,7 @@ export default function App() {
   const [tab, setTab]   = useState(TAB.HOME);
   const [screen, setScreen] = useState(S.HOME);
   const [ctx, setCtx]   = useState({});
+  const [overlayOpen, setOverlayOpen] = useState(false);
   const [signed, setSigned]     = useState([]);
   const [reminded, setReminded] = useState([]);
   const [chatMsgs, setChatMsgs] = useState(() => {
@@ -304,9 +344,23 @@ export default function App() {
     setPendingResolve(p => p.filter(x => !ids.includes(x)));
   };
 
-  const remind = (id) => { setReminded(p => [...p, id]); showToast("Reminder sent ✓"); };
+  const remind = (id, toastCfg) => {
+    setReminded(p => (p.includes(id) ? p : [...p, id]));
+    if (toastCfg === null) return;
+    if (toastCfg) showToast(toastCfg);
+    else showToast("Reminder sent ✓");
+  };
+  const undoRemind = (id) => setReminded(p => p.filter(x => x !== id));
   const sign   = (id) => { setSigned(p => [...p, id]);   showToast("Document signed ✓"); };
-  const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(null), 2000); };
+  const showToast = (input) => {
+    if (!input) { setToast(null); return; }
+    const t = typeof input === "string" ? { msg: input, auto: true } : input;
+    setToast(t);
+    if (t.auto !== false && !t.actions?.length) {
+      setTimeout(() => setToast(null), 2000);
+    }
+  };
+  const hideToast = () => setToast(null);
   const sendMsg = (key, text) => {
     const msg = { id:Date.now(), from:"cpa", text, time: new Date().toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"}) };
     setChatMsgs(p => ({ ...p, [key]: [...(p[key]||[]), msg] }));
@@ -322,11 +376,12 @@ export default function App() {
   };
   const openTopic = (chat, topic) => { go(S.CHAT, { chat, topic }); };
 
-  const screenProps = { go, goTab, clients, signatures, forms8879, extensions, chats, docs, auditLog, signed, reminded, remind, sign, chatMsgs, chatUnread, openChat, openTopic, sendMsg, ctx, pendingResolve, resolveOnReturn, clearPendingResolve, showToast };
+  const screenProps = { go, goTab, clients, signatures, forms8879, extensions, chats, docs, auditLog, signed, reminded, remind, undoRemind, sign, chatMsgs, chatUnread, openChat, openTopic, sendMsg, ctx, pendingResolve, resolveOnReturn, clearPendingResolve, showToast, hideToast, setOverlayOpen };
 
   return (
     <div style={{ minHeight:"100vh", background:"#c0c0c0", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"'Segoe UI',system-ui,sans-serif" }}>
       <div style={{ width:375, height:780, background:"#f0f0f0", borderRadius:40, boxShadow:"0 32px 80px rgba(0,0,0,0.25)", overflow:"hidden", display:"flex", flexDirection:"column", position:"relative" }}>
+        <style>{`@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}@keyframes signLand{0%{transform:translateY(-8px) scale(0.96);opacity:0}100%{transform:translateY(0) scale(1);opacity:1}}@keyframes metricPop{0%{transform:scale(1.08);opacity:.6}100%{transform:scale(1);opacity:1}}`}</style>
 
         {/* Status bar */}
         <div style={{ background:"#2d2d2d", padding:"10px 22px 6px", display:"flex", justifyContent:"space-between", flexShrink:0 }}>
@@ -362,11 +417,35 @@ export default function App() {
 
         {/* Toast */}
         {toast && (
-          <div style={{ position:"absolute", bottom:80, left:20, right:20, background:"#4a4a4a", color:"#fff", borderRadius:12, padding:"11px 16px", fontSize:13, fontWeight:600, textAlign:"center", boxShadow:"0 4px 20px rgba(5,150,105,0.4)", zIndex:100 }}>{toast}</div>
+          <div style={{ position:"absolute", bottom:80, left:20, right:20, background:"#4a4a4a", color:"#fff", borderRadius:12, padding:"11px 16px", fontSize:13, fontWeight:600, textAlign:"center", boxShadow:"0 4px 20px rgba(5,150,105,0.4)", zIndex:100 }}>
+            <div style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:10 }}>
+              <span>{typeof toast === "string" ? toast : toast.msg}</span>
+              {toast.actions?.length > 0 && (
+                <div style={{ display:"flex", gap:6 }}>
+                  {toast.actions.map((a,i) => (
+                    <button
+                      key={i}
+                      onClick={a.onClick}
+                      style={{
+                        border:"1px solid rgba(255,255,255,0.35)",
+                        background:"rgba(255,255,255,0.08)",
+                        color:"#fff",
+                        borderRadius:8,
+                        padding:"3px 8px",
+                        fontSize:11,
+                        fontWeight:600,
+                        cursor:"pointer",
+                      }}
+                    >{a.label}</button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
         )}
 
         {/* Nav — only on top-level tab screens */}
-        {[S.HOME, S.CLIENTS, S.MESSAGING, S.DOCUMENTS].includes(screen) && (
+        {[S.HOME, S.CLIENTS, S.MESSAGING, S.DOCUMENTS].includes(screen) && !overlayOpen && (
           <BottomNav tab={tab} setTab={goTab} totalUnread={totalUnread} />
         )}
       </div>
@@ -377,259 +456,501 @@ export default function App() {
 // ══════════════════════════════════════════════════════════════════
 // HOME SCREEN
 // ══════════════════════════════════════════════════════════════════
-function HomeScreen({ go, clients, signatures, forms8879, extensions, reminded, remind, signed, pendingResolve, resolveOnReturn, clearPendingResolve }) {
-  const pendingSigs  = signatures.filter(s => !signed.includes(s.id));
-  const pending8879  = forms8879.filter(f => f.status === "pending");
-  const rejectedExt  = extensions.filter(e => e.status === "rejected");
+function HomeScreen({ go, clients, signatures, forms8879, extensions, reminded, remind, undoRemind, showToast, hideToast, setOverlayOpen, signed }) {
+  const [cardExiting, setCardExiting] = useState(false);
+  const [exitDir, setExitDir]       = useState(null); // "skip" | "action"
+  const [remindSheet, setRemindSheet] = useState(null);
+  const [remindReason, setRemindReason] = useState("Missing documents");
+  const [remindCustom, setRemindCustom] = useState("");
+  const [refileSheet, setRefileSheet] = useState(null);
+  const [refileFileSheet, setRefileFileSheet] = useState(false);
+  const [refileSubmitting, setRefileSubmitting] = useState(false);
+  const [eSignSheet, setESignSheet] = useState(null);
+  const [eSignSubmitting, setESignSubmitting] = useState(false);
+  const [eSignDocOpen, setESignDocOpen] = useState(false);
+  const [eSignStep, setESignStep] = useState(1);
+  const [eSignSigned, setESignSigned] = useState({ first:false, second:false });
+  const [awaitingCount, setAwaitingCount] = useState(0);
+  const [queueKeys, setQueueKeys] = useState([]);
+  const [queueInitialized, setQueueInitialized] = useState(false);
+  const eSignSecondRef = useRef(null);
 
-  const allUrgent = [
-    ...pendingSigs.map(s => ({
-      id:`sig-${s.id}`, client:s.client, type:"signature",
-      title:"Sign document", sub:s.doc,
-      badge:"My signature", badgeColor:"#444",
-      navFn: () => go(S.SIGN_DOC, { sig:s }),
-      cta:"Sign Now",
-    })),
-    ...pending8879.map(f => ({
-      id:`8879-${f.id}`, client:f.client, type:"8879",
-      title:"8879 awaiting client", sub:f.jurisdiction,
-      badge:"3d waiting", badgeColor:"#c8a200",
-      navFn: () => go(S.FORM_8879),
-      cta:"Send Reminder",
-    })),
-    ...rejectedExt.map(e => ({
-      id:`ext-${e.id}`, client:e.client, type:"rejected",
-      title:"Extension rejected", sub:e.jurisdiction,
-      badge:"Action needed", badgeColor:"#b05a54",
-      navFn: () => go(S.BATCH_EXT_STATUS),
-      cta:"View Error",
-    })),
-    { id:"overdue-1", client:"John Doe", type:"overdue",
-      title:"Upload docs overdue", sub:"3 days past internal deadline",
-      badge:"3d overdue", badgeColor:"#b05a54",
-      navFn: () => go(S.CLIENT_DETAIL, { client: clients.find(c=>c.name==="John Doe") }),
-      cta:"Remind Client",
-    },
-  ];
+  const buildFocusCards = () => {
+    const allCards = [];
+    clients
+      .filter(c => c.blockedBy === "client")
+      .map(c => {
+        const sig  = signatures.find(s => s.client === c.name);
+        const f8   = forms8879.find(f => f.client === c.name && f.status === "pending");
+        const isEL = c.elStatus !== "signed";
+        const what = isEL ? "EL not signed"
+                   : f8  ? "8879 awaiting client"
+                   : sig ? "Signature pending"
+                   : c.stepLabel;
+        const context = isEL
+          ? "Engagement letter hasn't been signed. Tax prep can't start until the client completes this."
+          : f8  ? "Client hasn't signed the 8879 e-file authorization. E-file is on hold until they do."
+          : sig ? "Client signature is pending on a document. The return can't move forward until resolved."
+          : `Client action needed at the "${c.stepLabel}" step. Return is blocked.`;
+        const days = sig ? sig.days : f8 ? 3 : 2;
+        const critical = days >= 7;
+        return {
+          key: `c-${c.id}`, client: c.name, clientObj: c,
+          what, context, days, tag: "CLIENT", urgent: critical, critical,
+        cta:   isEL ? "Send EL"  : "Send reminder",
+          ctaFn: isEL ? () => go(S.EL_WIZARD, { preClient:c }) : () => go(S.CLIENT_DETAIL, { client:c, from:S.HOME }),
+        };
+      })
+      .sort((a,b) => b.days - a.days)
+      .forEach(r => allCards.push(r));
 
-  const [resolved, setResolved]   = useState([]);
-  const [dismissing, setDismissing] = useState([]);
-  const [needsAttentionExpanded, setNeedsAttentionExpanded] = useState(false);
-
-  // On mount / every time pendingResolve changes — trigger animation for returned items
-  const prevPending = useState([])[0];
-  useState(() => {}); // placeholder to keep hook order stable
-
-  // Use effect substitute with useState + immediate logic
-  const [lastPending, setLastPending] = useState([]);
-  if (pendingResolve.length > 0 && pendingResolve.some(id => !lastPending.includes(id) && !dismissing.includes(id) && !resolved.includes(id))) {
-    const newIds = pendingResolve.filter(id => !lastPending.includes(id) && !dismissing.includes(id) && !resolved.includes(id));
-    if (newIds.length > 0) {
-      setLastPending(pendingResolve);
-      // Stagger: each item animates one after another
-      newIds.forEach((id, i) => {
-        setTimeout(() => {
-          setDismissing(p => [...p, id]);
-          setTimeout(() => {
-            setResolved(p => [...p, id]);
-            setDismissing(p => p.filter(x => x !== id));
-            clearPendingResolve([id]);
-          }, 420);
-        }, i * 180);
+    forms8879.filter(f => f.status === "failed").forEach(f => {
+      const cl = clients.find(c => c.name === f.client);
+      allCards.push({
+        key: `kba-${f.id}`, client: f.client, clientObj: cl,
+        what: "E‑signature needed",
+        context: `Client must sign Form 8879 to authorize IRS e‑file for ${f.jurisdiction}. Send the e‑signature to continue.`,
+        days: null, tag: "IRS", urgent: true, critical: true, form: f,
+        cta: "Sign", ctaFn: () => cl ? go(S.CLIENT_DETAIL, { client: cl, from:S.HOME }) : go(S.FORM_8879),
       });
+    });
+    extensions.filter(e => e.status === "rejected").forEach(e => {
+      const cl = clients.find(c => c.name === e.client);
+      allCards.push({
+        key: `ext-${e.id}`, client: e.client, clientObj: cl,
+        what: "Extension rejected",
+        context: `Extension was rejected by IRS for ${e.jurisdiction}. Must be refiled before the ${e.deadline} deadline.`,
+        days: null, tag: "IRS", urgent: true, critical: true, ext: e,
+        cta: "Refile", ctaFn: () => cl ? go(S.CLIENT_DETAIL, { client: cl, from:S.HOME }) : go(S.BATCH_EXT_STATUS),
+      });
+    });
+
+    allCards.sort((a,b) => {
+      if (a.critical && !b.critical) return -1;
+      if (!a.critical && b.critical) return 1;
+      return (b.days||99) - (a.days||99);
+    });
+
+    return allCards;
+  };
+
+  const advanceCard = (dir, fn, markResolved=false) => {
+    if (markResolved) setAwaitingCount(a => a + 1);
+    setExitDir(dir);
+    setCardExiting(true);
+    if (fn) fn();
+    setTimeout(() => {
+      setCardExiting(false);
+      setExitDir(null);
+      setQueueKeys(q => {
+        if (q.length === 0) return q;
+        if (markResolved) return q.slice(1);
+        if (q.length === 1) return q;
+        return [...q.slice(1), q[0]];
+      });
+    }, 260);
+  };
+
+  const buildRemindReasons = (card, client) => {
+    const what = (card?.what || "").toLowerCase();
+    const step = (client?.stepLabel || "").toLowerCase();
+    if (what.includes("signature") || step.includes("sign")) {
+      return ["Signature pending", "Please sign today", "Consent needed to proceed", "Custom"];
     }
-  }
+    if (what.includes("organizer") || step.includes("organizer")) {
+      return ["Organizer incomplete", "Missing organizer details", "Need clarification", "Custom"];
+    }
+    if (what.includes("upload") || what.includes("document") || step.includes("upload") || step.includes("doc")) {
+      return ["Missing documents", "Upload requested docs", "Need W‑2/1099", "Custom"];
+    }
+    if (what.includes("payment")) {
+      return ["Payment pending", "Invoice due", "Payment confirmation needed", "Custom"];
+    }
+    return ["Waiting on client", "Confirmation needed", "Action required", "Custom"];
+  };
 
-  const active     = allUrgent.filter(i => !resolved.includes(i.id));
-  const done       = allUrgent.filter(i =>  resolved.includes(i.id));
-  const stackPeek  = Math.min(active.length - 1, 2);
+  const getRejectInfo = (ext) => {
+    if (!ext) return { code:"EXT-400", reason:"Validation error" };
+    const map = {
+      Federal: { code:"IND-901", reason:"Name/ID mismatch" },
+      NY:      { code:"NY-108",  reason:"State ID mismatch" },
+      PA:      { code:"PA-204",  reason:"Duplicate filing" },
+    };
+    return map[ext.jurisdiction] || { code:"EXT-400", reason:"Validation error" };
+  };
 
-  const engaged = [
-    { id:1, name:"John Doe",      type:"1040",   activity:"Uploaded W-2 · 2h ago",    step:3, steps:7 },
-    { id:3, name:"Tiffany Trust", type:"1041",   activity:"Signed 8879 · Yesterday",  step:5, steps:7 },
-    { id:6, name:"Sarah Connor",  type:"1040",   activity:"Replied to message · Mon", step:6, steps:7 },
-  ];
+  const getRefileDoc = (ext, client) => {
+    if (!ext || !client) return null;
+    return {
+      name: `Extension_${client.name.replace(/\s+/g,"_")}_${ext.jurisdiction}.pdf`,
+      size: "128 KB",
+      date: "Today",
+    };
+  };
 
-  const Avatar = ({ name, size=32 }) => (
-    <div style={{ width:size, height:size, borderRadius:99, background:"#2d2d2d", color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", fontWeight:700, fontSize:size*0.4, flexShrink:0 }}>{name[0]}</div>
-  );
+  const openRemindSheet = (card, client) => {
+    const opts = buildRemindReasons(card, client);
+    setRemindReason(opts[0]);
+    setRemindCustom("");
+    setRemindSheet({ card, client });
+    setOverlayOpen(true);
+  };
+
+  const openRefileSheet = (card, client) => {
+    setRefileSheet({ card, client, ext: card.ext });
+    setRefileSubmitting(false);
+    setRefileFileSheet(false);
+    setOverlayOpen(true);
+  };
+
+  const openESignSheet = (card, client) => {
+    setESignSubmitting(false);
+    setESignDocOpen(false);
+    setESignStep(1);
+    setESignSigned({ first:false, second:false });
+    setESignSheet({ card, client, form: card.form });
+    setOverlayOpen(true);
+  };
+
+  const handleRefileAction = (label, toastMsg) => {
+    setRefileSheet(null);
+    setOverlayOpen(false);
+    advanceCard("skip", () => {
+      showToast({
+        msg: toastMsg,
+        auto: false,
+        actions: [
+          { label:"Cancel", onClick: () => showToast("Action canceled") },
+          { label:"Close", onClick: hideToast },
+        ],
+      });
+    });
+  };
+
+  const openESignDoc = () => {
+    setESignStep(1);
+    setESignSigned({ first:false, second:false });
+    setESignDocOpen(true);
+  };
+
+  const handleESignFirst = () => {
+    if (eSignStep !== 1) return;
+    setESignSigned(p => ({ ...p, first:true }));
+    setESignStep(2);
+    setTimeout(() => {
+      eSignSecondRef.current?.scrollIntoView({ behavior:"smooth", block:"center" });
+    }, 100);
+  };
+
+  const handleESignSecond = () => {
+    if (eSignStep < 2) return;
+    setESignSigned(p => ({ ...p, second:true }));
+    setESignStep(3);
+    // finish -> return to sheet with loader
+    setTimeout(() => {
+      setESignDocOpen(false);
+      setESignSubmitting(true);
+      setTimeout(() => {
+        setESignSubmitting(false);
+        setESignSheet(null);
+        setOverlayOpen(false);
+        advanceCard("action", () => showToast("E‑signature completed"), true);
+      }, 2000);
+    }, 400);
+  };
+
+  const openRefileFileSheet = () => {
+    setRefileFileSheet(true);
+    setOverlayOpen(true);
+  };
+
+  const handleRefileFileSelect = () => {
+    setRefileFileSheet(false);
+    setRefileSubmitting(true);
+    setTimeout(() => {
+      setRefileSubmitting(false);
+      setRefileSheet(null);
+      setOverlayOpen(false);
+      advanceCard("skip", () => showToast("Extension resubmitted"), true);
+    }, 2000);
+  };
+
+  const sendReminder = () => {
+    if (!remindSheet?.client) return;
+    const c = remindSheet.client;
+    const reasonText = remindReason === "Custom" ? (remindCustom.trim() || "Custom") : remindReason;
+    setRemindSheet(null);
+    setOverlayOpen(false);
+    advanceCard("skip", () => {
+      remind(c.id, {
+        msg: `Reminder sent · ${reasonText}`,
+        auto: false,
+        actions: [
+          {
+            label: "Cancel",
+            onClick: () => {
+              undoRemind(c.id);
+              showToast("Reminder canceled");
+            },
+          },
+          { label: "Close", onClick: hideToast },
+        ],
+      });
+    }, true);
+  };
+
+  const allCards = buildFocusCards();
+  const cardMap = Object.fromEntries(allCards.map(c => [c.key, c]));
+  useEffect(() => {
+    if (!queueInitialized && allCards.length > 0) {
+      setQueueKeys(allCards.map(c => c.key));
+      setQueueInitialized(true);
+    }
+  }, [allCards.length, queueInitialized]);
+  const remainingCards = queueKeys.map(k => cardMap[k]).filter(Boolean);
+  const blockersCount = remainingCards.length;
+  const criticalCount = remainingCards.filter(c => c.critical).length;
+
+  const [metricHide, setMetricHide] = useState({ blockers:blockersCount===0, critical:criticalCount===0 });
+  const [metricClosing, setMetricClosing] = useState({ blockers:false, critical:false });
+
+  useEffect(() => {
+    if (blockersCount === 0 && !metricHide.blockers && !metricClosing.blockers) {
+      setMetricClosing(v => ({ ...v, blockers:true }));
+      setTimeout(() => {
+        setMetricHide(v => ({ ...v, blockers:true }));
+        setMetricClosing(v => ({ ...v, blockers:false }));
+      }, 220);
+    } else if (blockersCount > 0 && metricHide.blockers) {
+      setMetricHide(v => ({ ...v, blockers:false }));
+    }
+  }, [blockersCount, metricHide.blockers, metricClosing.blockers]);
+
+  useEffect(() => {
+    if (criticalCount === 0 && !metricHide.critical && !metricClosing.critical) {
+      setMetricClosing(v => ({ ...v, critical:true }));
+      setTimeout(() => {
+        setMetricHide(v => ({ ...v, critical:true }));
+        setMetricClosing(v => ({ ...v, critical:false }));
+      }, 220);
+    } else if (criticalCount > 0 && metricHide.critical) {
+      setMetricHide(v => ({ ...v, critical:false }));
+    }
+  }, [criticalCount, metricHide.critical, metricClosing.critical]);
 
   return (
     <div style={{ flex:1 }}>
-      {/* Dark header — title only */}
-      <div style={{ background:"#2d2d2d", padding:"12px 18px 14px" }}>
+      {/* Dark header — title + metrics */}
+      <div style={{ background:"#2d2d2d", padding:"10px 18px 18px" }}>
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-          <div style={{ color:"#fff", fontSize:22, fontWeight:700 }}>Home</div>
-          <button onClick={() => go(S.SETTINGS)} style={{ border:"none", background:"rgba(255,255,255,0.12)", width:32, height:32, borderRadius:99, cursor:"pointer", color:"#d0d0d0", fontSize:16, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>⚙</button>
+          <div style={{ color:"#fff", fontSize:20, fontWeight:700 }}>Home</div>
+          <button onClick={() => go(S.SETTINGS)} style={{ border:"none", background:"transparent", width:32, height:32, borderRadius:99, cursor:"pointer", color:"#d0d0d0", fontSize:22, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>⚙</button>
+        </div>
+
+        <div style={{ padding:"0 0 0" }}>
+          {/* ── FOCUS QUEUE — card-by-card attention mechanic ── */}
+          {(() => {
+            const remaining = remainingCards;
+            const tagStyle = {
+              Blocker: { bg:"#fff4d6", c:"#b8860b" },
+              Critical: { bg:"#fdecea", c:"#b05a54" },
+            };
+
+            return (
+              <div style={{ marginTop:14 }}>
+                {/* Slim metrics tags */}
+                {(() => {
+                  const items = [
+                    { id:"awaiting", label:"Awaiting", value:awaitingCount, bg:"rgba(255,255,255,0.08)", c:"#ffffff", static:true },
+                    { id:"blockers", label:"Blockers", value:blockersCount, bg:"rgba(255,215,102,0.18)", c:"#ffe38b" },
+                    { id:"critical", label:"Critical", value:criticalCount, bg:"rgba(255,105,97,0.18)", c:"#ffb9b4" },
+                  ].filter(m => m.static || !metricHide[m.id] || metricClosing[m.id]);
+
+                  if (items.length === 0) return null;
+
+                  return (
+                    <div style={{ display:"flex", gap:8, marginBottom:12 }}>
+                      {items.map(m => {
+                        const collapsing = !m.static && metricClosing[m.id] && m.value === 0;
+                        return (
+                          <div
+                            key={m.id}
+                            style={{
+                              flex: collapsing ? "0 0 0" : "1 1 0",
+                              maxWidth: collapsing ? 0 : "100%",
+                              opacity: collapsing ? 0 : 1,
+                              transform: collapsing ? "scale(0.92)" : "scale(1)",
+                              padding: collapsing ? "0" : "6px 10px",
+                              borderRadius:999,
+                              background: collapsing ? "transparent" : m.bg,
+                              border: collapsing ? "0" : "1px solid rgba(255,255,255,0.08)",
+                              display:"inline-flex",
+                              alignItems:"center",
+                              justifyContent:"center",
+                              gap:6,
+                              overflow:"hidden",
+                              transition:"all 0.25s ease",
+                            }}
+                          >
+                            <span key={`${m.id}-${m.value}`} style={{ fontSize:13, fontWeight:700, color: m.value > 0 ? m.c : "rgba(255,255,255,0.35)", lineHeight:1, animation:"metricPop 0.25s ease" }}>{m.value}</span>
+                            <span style={{ fontSize:9, letterSpacing:0.6, textTransform:"uppercase", color:"rgba(255,255,255,0.65)", lineHeight:1 }}>{m.label}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
+
+              {remaining.length === 0 ? (
+                /* Empty state */
+                <div style={{ background:"#fff", border:"1px solid #e8e8e8", borderRadius:18, padding:"32px 20px", textAlign:"center" }}>
+                  <div style={{ width:44, height:44, borderRadius:99, background:"#f0f0f0", display:"flex", alignItems:"center", justifyContent:"center", margin:"0 auto 12px", fontSize:20 }}>✓</div>
+                  <div style={{ fontSize:15, fontWeight:700, color:"#1a1a1a", marginBottom:5 }}>You're all caught up</div>
+                  <div style={{ fontSize:12, color:"#aaaaaa", lineHeight:1.5 }}>No items need attention right now</div>
+                </div>
+              ) : (() => {
+                const card  = remaining[0];
+                const c     = card.clientObj;
+                const peek1 = remaining[1];
+                const peek2 = remaining[2];
+                const exitTransform = cardExiting
+                  ? exitDir === "action"
+                    ? "translateX(108%) rotate(7deg)"
+                    : "translateX(-108%) rotate(-7deg)"
+                  : "none";
+
+                return (
+                  <div style={{ position:"relative", paddingTop:12 }}>
+
+                    {/* Peek card 3 — furthest back */}
+                    {peek2 && (
+                      <div style={{
+                        position:"absolute", left:18, right:18, top:4,
+                        height:24, background:"#d4d4d4", borderRadius:18, zIndex:1,
+                      }} />
+                    )}
+
+                    {/* Peek card 2 */}
+                    {peek1 && (
+                      <div style={{
+                        position:"absolute", left:9, right:9, top:0,
+                        height:28, background:"#e4e4e4", borderRadius:18, zIndex:2,
+                      }} />
+                    )}
+
+                    {/* Main card */}
+                    <div style={{
+                      position:"relative", zIndex:3,
+                      background:"#fff",
+                      border:"1px solid #e0e0e0",
+                      borderRadius:18,
+                      boxShadow:"0 4px 24px rgba(0,0,0,0.09)",
+                      overflow:"hidden",
+                      transform: exitTransform,
+                      transition: cardExiting ? "transform 0.26s cubic-bezier(0.4,0,1,1), opacity 0.26s" : "none",
+                      opacity: cardExiting ? 0 : 1,
+                      willChange: "transform",
+                    }}>
+
+                      {/* Task + client header */}
+                      <div style={{ padding:"14px 16px 12px" }}>
+                        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
+                          <div style={{ fontSize:15, fontWeight:700, color:"#1a1a1a", lineHeight:1.2 }}>{card.what}</div>
+                          {(() => {
+                            const tagLabel = card.critical ? "Critical" : "Blocker";
+                            const ts = tagStyle[tagLabel];
+                            return (
+                              <span style={{ fontSize:9, fontWeight:700, background:ts.bg, color:ts.c, borderRadius:6, padding:"3px 9px", letterSpacing:0.5, flexShrink:0 }}>
+                                {tagLabel}
+                              </span>
+                            );
+                          })()}
+                        </div>
+                        <div style={{ fontSize:12, color:"#777777", lineHeight:1.6 }}>{card.context}</div>
+                      </div>
+
+                      {/* Workflow progress */}
+                      {c && (
+                        <div style={{ padding:"10px 16px" }}>
+                          <div style={{ display:"flex", justifyContent:"space-between", marginBottom:5 }}>
+                            <span style={{ fontSize:11, color:"#777777" }}>{c.stepLabel}</span>
+                            <span style={{ fontSize:11, color:"#bbbbbb" }}>Step {c.step} of {c.steps}</span>
+                          </div>
+                          <StepBar step={c.step} total={c.steps} />
+                          <div style={{ height:1, background:"#f0f0f0", marginTop:10 }} />
+                          <div style={{ display:"flex", alignItems:"center", gap:10, marginTop:10 }}>
+                            <div style={{ width:36, height:36, borderRadius:99, background:"#2d2d2d", color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", fontWeight:700, fontSize:15, flexShrink:0 }}>
+                              {card.client[0]}
+                            </div>
+                            <div>
+                              <div style={{ fontSize:13, fontWeight:600, color:"#1a1a1a", lineHeight:1.2 }}>{card.client}</div>
+                              <div style={{ fontSize:11, color:"#888888", marginTop:3 }}>{c.stepLabel}</div>
+                              <div style={{ display:"flex", gap:5, alignItems:"center", marginTop:3 }}>
+                                {c && <TypeBadge type={c.type} />}
+                                {c && <RiskDot risk={c.risk} />}
+                              </div>
+                            </div>
+                          </div>
+                          {card.days != null && (
+                            <div style={{ marginTop:10, display:"inline-flex", alignItems:"center", gap:6, background: card.days>=7 ? "#fff3f3" : "#fffbf0", borderRadius:8, padding:"5px 10px" }}>
+                              <div style={{ width:6, height:6, borderRadius:99, background: card.days>=7 ? "#b05a54" : "#c8a200", flexShrink:0 }} />
+                              <span style={{ fontSize:11, fontWeight:600, color: card.days>=7 ? "#b05a54" : "#c8a200" }}>
+                                Waiting {card.days} day{card.days !== 1 ? "s" : ""}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Action buttons */}
+                      <div style={{ padding:"0 14px 14px", display:"flex", gap:8 }}>
+                        <button
+                          onClick={() => advanceCard("skip")}
+                          style={{ flex:1, border:"1.5px solid #e0e0e0", borderRadius:12, padding:"12px 0", background:"#fff", color:"#1a1a1a", fontWeight:600, fontSize:13, cursor:"pointer" }}
+                        >Remind later</button>
+                        <button
+                          onClick={() => (
+                            card.cta === "Send reminder" ? openRemindSheet(card, c)
+                            : card.cta === "Refile" ? openRefileSheet(card, c)
+                            : card.cta === "Sign" ? openESignSheet(card, c)
+                            : advanceCard("action", card.ctaFn, true)
+                          )}
+                          style={{ flex:1, border:"none", borderRadius:12, padding:"12px 0", background:"#2d2d2d", color:"#fff", fontWeight:700, fontSize:13, cursor:"pointer" }}
+                        >{card.cta}</button>
+                      </div>
+
+                    </div>
+                  </div>
+                );
+              })()}
+              </div>
+            );
+          })()}
         </div>
       </div>
 
-      <div style={{ padding:"0 18px 20px" }}>
+      <div style={{ padding:"8px 18px 20px" }}>
 
-        {/* ── DAILY SUMMARY ── */}
-        {(() => {
-          const blocked = clients.filter(c => c.blockedBy === "client").length;
-          const overdue = clients.filter(c => c.blockedBy === "client").filter(c => {
-            const sig = signatures.find(s => s.client === c.name);
-            return (sig ? sig.days : 2) >= 7;
-          }).length;
-          const errorItems = [
-            ...forms8879.filter(f => f.status === "failed").map(f => ({
-              key:`kba-${f.id}`, label:`${f.client} — 8879 KBA failed`, sub:f.jurisdiction, cta:"Fix KBA", fn:() => go(S.FORM_8879),
-            })),
-            ...extensions.filter(e => e.status === "rejected").map(e => ({
-              key:`ext-${e.id}`, label:`${e.client} — Extension rejected`, sub:e.jurisdiction, cta:"Refile", fn:() => go(S.BATCH_EXT_STATUS),
-            })),
-          ];
-          const errors = errorItems.length;
-
-          // Build a single flowing summary paragraph
-          const summaryParts = [];
-          if (blocked > 0 && overdue > 0)
-            summaryParts.push(`You have ${blocked} returns waiting on clients, ${overdue} of which have been stalled for over a week.`);
-          else if (blocked > 0)
-            summaryParts.push(`You have ${blocked} return${blocked>1?"s":""}  currently waiting on client action.`);
-          if (errors > 0)
-            summaryParts.push(`There ${errors>1?"are":"is"} also ${errors} item${errors>1?"s":""} that need direct fixing before they can move forward.`);
-          if (blocked === 0 && errors === 0)
-            summaryParts.push("Everything is moving — no blockers or errors today.");
-          summaryParts.push("Send reminders to anyone who's gone quiet.");
-          const summaryText = summaryParts.join(" ");
-
-          return (
-            <div style={{ marginTop:14, background:"#fff", border:"1px solid #e0e0e0", borderRadius:16, overflow:"hidden" }}>
-
-              {/* Metrics row — 3 stats */}
-              <div style={{ display:"flex", borderBottom:"1px solid #f0f0f0" }}>
-                {[
-                  { label:"Awaiting",  value:blocked, color:"#1a1a1a" },
-                  { label:"Blockers",  value:errors,  color:"#b05a54" },
-                  { label:"Critical",  value:overdue, color:"#c8a200" },
-                ].map((m, i, arr) => (
-                  <div key={m.label} style={{ flex:1, padding:"12px 4px 10px", textAlign:"center", borderRight: i<arr.length-1?"1px solid #f0f0f0":"none" }}>
-                    <div style={{ fontSize:26, fontWeight:700, color: m.value > 0 ? m.color : "#d0d0d0", lineHeight:1 }}>{m.value}</div>
-                    <div style={{ fontSize:8.5, color:"#aaaaaa", marginTop:3, lineHeight:1.3 }}>{m.label}</div>
-                  </div>
-                ))}
-              </div>
-
-              {/* Summary paragraph */}
-              <div style={{ padding:"12px 14px 0" }}>
-                <p style={{ margin:0, fontSize:12, color:"#555555", lineHeight:1.6 }}>{summaryText}</p>
-              </div>
-
-              {/* Action buttons */}
-              <div style={{ display:"flex", gap:8, padding:"12px 14px 14px" }}>
-                <button
-                  onClick={() => go(S.MESSAGING)}
-                  style={{ flex:1, border:"1px solid #d8d8d8", borderRadius:10, padding:"10px 8px", background:"#fff", color:"#333333", fontWeight:600, fontSize:12, cursor:"pointer" }}
-                >Send Reminders</button>
-                <button
-                  onClick={() => go(S.MY_SIGNATURES)}
-                  style={{ flex:1, border:"none", borderRadius:10, padding:"10px 8px", background:"#2d2d2d", color:"#fff", fontWeight:700, fontSize:12, cursor:"pointer" }}
-                >Sign Documents (2)</button>
-              </div>
-
-            </div>
-          );
-        })()}
-
-        {/* ── MERGED: Needs Attention — client blockers + IRS/system blockers ── */}
-        {(() => {
-          const PREVIEW = 4;
-          const expanded = needsAttentionExpanded;
-
-          const rows = [];
-          clients
-            .filter(c => c.blockedBy === "client")
-            .map(c => {
-              const sig = signatures.find(s => s.client === c.name);
-              const f8  = forms8879.find(f => f.client === c.name && f.status === "pending");
-              const what = c.elStatus !== "signed" ? "EL unsigned"
-                         : f8 ? "8879 pending"
-                         : sig ? "Signature pending"
-                         : c.stepLabel;
-              const days = sig ? sig.days : f8 ? 3 : 2;
-              const isEL = c.elStatus !== "signed";
-              return { key:`client-${c.id}`, client:c.name, what, days, tag:"CLIENT", urgent: days>=7,
-                cta: isEL ? "Send EL" : "Remind",
-                ctaFn: isEL ? () => go(S.EL_WIZARD, { preClient:c }) : () => go(S.CLIENT_DETAIL, { client:c }) };
-            })
-            .sort((a,b) => b.days - a.days)
-            .forEach(r => rows.push(r));
-          forms8879.filter(f => f.status === "failed").forEach(f => {
-            rows.push({ key:`kba-${f.id}`, client:f.client, what:`8879 KBA failed · ${f.jurisdiction}`, days:null, tag:"IRS", urgent:true, cta:"Review", ctaFn:() => go(S.FORM_8879) });
-          });
-          extensions.filter(e => e.status === "rejected").forEach(e => {
-            rows.push({ key:`ext-${e.id}`, client:e.client, what:`Extension rejected · ${e.jurisdiction}`, days:null, tag:"IRS", urgent:true, cta:"Review", ctaFn:() => go(S.BATCH_EXT_STATUS) });
-          });
-          rows.sort((a,b) => {
-            if (a.urgent && !b.urgent) return -1;
-            if (!a.urgent && b.urgent) return 1;
-            return (b.days||99) - (a.days||99);
-          });
-
-          const visible = (rows.length <= PREVIEW || expanded) ? rows : rows.slice(0, PREVIEW);
-          const hidden  = rows.length - PREVIEW;
-          const tagStyle = {
-            CLIENT: { bg:"#f0f0f0", c:"#666666" },
-            IRS:    { bg:"#fdecea", c:"#b05a54" },
-          };
-
-          return (
-            <div style={{ marginTop:20 }}>
-              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
-                <div style={{ fontSize:10, fontWeight:700, color:"#999999", letterSpacing:1.5 }}>NEEDS ATTENTION</div>
-                <span style={{ fontSize:10, color:"#999999" }}>{rows.length} items</span>
-              </div>
-              <div style={{ background:"#fff", border:"1px solid #e0e0e0", borderRadius:14, overflow:"hidden" }}>
-                {visible.map((r, i, arr) => (
-                  <div key={r.key} style={{ display:"flex", alignItems:"center", padding:"9px 14px", borderBottom:"1px solid #f4f4f4", gap:10, background: r.urgent && r.tag==="IRS" ? "#fffafa" : "#fff" }}>
-                    <div style={{ flex:1, minWidth:0 }}>
-                      <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:1 }}>
-                        <span style={{ fontSize:13, fontWeight:600, color:"#1a1a1a", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{r.client}</span>
-                        <span style={{ fontSize:9, fontWeight:700, background:tagStyle[r.tag].bg, color:tagStyle[r.tag].c, borderRadius:4, padding:"1px 5px", flexShrink:0 }}>{r.tag}</span>
-                      </div>
-                      <div style={{ fontSize:11, color:"#999999" }}>
-                        {r.what}{r.days != null && <span style={{ color: r.days>=7?"#b05a54":"#999999", fontWeight: r.days>=7?600:400 }}> · {r.days}d</span>}
-                      </div>
-                    </div>
-                    <button onClick={r.ctaFn} style={{ border:"none", borderRadius:8, padding:"5px 10px", fontSize:11, fontWeight:600, background: r.urgent?"#2d2d2d":"#f0f0f0", color: r.urgent?"#fff":"#555555", cursor:"pointer", flexShrink:0 }}>{r.cta}</button>
-                  </div>
-                ))}
-                {/* See more / See less footer */}
-                {rows.length > PREVIEW && (
-                  <div onClick={() => setNeedsAttentionExpanded(e => !e)} style={{ padding:"10px 14px", textAlign:"center", cursor:"pointer", borderTop:"1px solid #f4f4f4", background:"#fafafa" }}>
-                    <span style={{ fontSize:12, fontWeight:600, color:"#555555" }}>
-                      {expanded ? "See less ↑" : `See ${hidden} more ↓`}
-                    </span>
-                  </div>
-                )}
-              </div>
-            </div>
-          );
-        })()}
-        {(() => {
+                {(() => {
           const stageCounts = stepLabels.map((label, i) =>
             clients.filter(c => c.step === i + 1).length
           );
           const maxCount = Math.max(...stageCounts, 1);
           const shortLabels = ["Sign EL","Req List","Upload","Organizer","Review","Sign Ret.","Payments"];
           return (
-            <div style={{ marginTop:20 }}>
-              <div style={{ fontSize:10, fontWeight:700, color:"#999999", letterSpacing:1.5, marginBottom:8 }}>RETURN PIPELINE · Tax Season 2024</div>
+            <div style={{ marginTop:16 }}>
+              <div style={{ fontSize:14, fontWeight:700, color:"#666666", letterSpacing:0.4, marginBottom:8 }}>Return Pipeline</div>
               <div style={{ background:"#fff", border:"1px solid #e0e0e0", borderRadius:14, padding:"12px 10px 10px" }}>
                 <div style={{ display:"flex", gap:0, alignItems:"flex-end", height:110 }}>
                   {stageCounts.map((count, i) => {
-                    const isMax = count === maxCount && count > 0;
                     const blocked = clients.filter(c => c.step === i+1 && c.blockedBy === "client").length;
                     const h = count === 0 ? 36 : Math.max(36, Math.round((count / maxCount) * 100));
                     return (
-                      <div key={i} onClick={() => go(S.MY_SIGNATURES)} style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", gap:3, cursor:"pointer", padding:"0 3px" }}>
-                        <div style={{ width:"100%", borderRadius:9, background: isMax?"#2d2d2d": count>0?"#e8e8e8":"#f4f4f4", display:"flex", alignItems:"center", justifyContent:"center", height:h, position:"relative", transition:"height 0.3s" }}>
-                          <span style={{ fontSize: count>9?12:14, fontWeight:700, color: isMax?"#fff": count>0?"#1a1a1a":"#d0d0d0" }}>{count}</span>
+                      <div key={i} style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", gap:3, padding:"0 3px" }}>
+                        <div style={{ width:"100%", borderRadius:9, background: count>0?"#e8e8e8":"#f4f4f4", display:"flex", alignItems:"center", justifyContent:"center", height:h, position:"relative", transition:"height 0.3s" }}>
+                          <span style={{ fontSize: count>9?12:14, fontWeight:700, color: count>0?"#1a1a1a":"#d0d0d0" }}>{count}</span>
                         </div>
-                        <span style={{ fontSize:7.5, color: isMax?"#2d2d2d":"#999999", textAlign:"center", lineHeight:1.2, fontWeight: isMax?700:400, whiteSpace:"nowrap" }}>{shortLabels[i]}</span>
+                        <span style={{ fontSize:8.5, color:"#777777", textAlign:"center", lineHeight:1.2, fontWeight:500, whiteSpace:"nowrap" }}>{shortLabels[i]}</span>
                       </div>
                     );
                   })}
@@ -637,14 +958,61 @@ function HomeScreen({ go, clients, signatures, forms8879, extensions, reminded, 
                 {/* Flow bar */}
                 <div style={{ display:"flex", gap:1, marginTop:8, height:3, borderRadius:99, overflow:"hidden" }}>
                   {stageCounts.map((v,i) => (
-                    <div key={i} style={{ flex:1, background: v===maxCount&&v>0?"#2d2d2d": v>0?"#d0d0d0":"#f0f0f0", borderRadius:99 }} />
+                    <div key={i} style={{ flex:1, background: v>0?"#d0d0d0":"#f0f0f0", borderRadius:99 }} />
                   ))}
                 </div>
                 <div style={{ display:"flex", justifyContent:"space-between", marginTop:4 }}>
                   <span style={{ fontSize:9, color:"#b0b0b0" }}>Start</span>
-                  <span style={{ fontSize:9, color:"#b0b0b0" }}>{clients.length} active · {clients.filter(c=>c.blockedBy==="client").length} blocked on client</span>
+                  <span />
                   <span style={{ fontSize:9, color:"#b0b0b0" }}>Filed</span>
                 </div>
+                <button
+                  style={{ width:"100%", marginTop:10, border:"1.5px solid #e0e0e0", background:"#fff", color:"#555555", fontSize:13, fontWeight:700, padding:"12px 0", borderRadius:12, cursor:"default" }}
+                >
+                  See details
+                </button>
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* SIGNATURES WIDGET */}
+        {(() => {
+          const sigPending = signatures.filter(s => !signed.includes(s.id)).length;
+          const sigCompleted = signatures.filter(s => signed.includes(s.id)).length;
+          const formPending = forms8879.filter(f => f.status === "pending").length;
+          const formCompleted = forms8879.filter(f => f.status === "signed").length;
+          const formFailed = forms8879.filter(f => f.status === "failed").length;
+          const signingInProcess = sigPending + formPending;
+          const completed = sigCompleted + formCompleted;
+          const stats = [
+            { label:"Signing in Process", value: signingInProcess, color:"#f2c94c" },
+            { label:"Completed", value: completed, color:"#4caf50" },
+            { label:"Cancelled", value: 0, color:"#f59e0b" },
+            { label:"Expired", value: 0, color:"#ef4444" },
+            { label:"Declined", value: 0, color:"#fca5a5" },
+            { label:"Authentication Failed", value: formFailed, color:"#ef5350" },
+          ];
+          const total = Math.max(stats.reduce((a,s)=>a+s.value,0), 1);
+          return (
+            <div style={{ marginTop:22 }}>
+              <div onClick={() => go(S.MY_SIGNATURES)} style={{ fontSize:14, fontWeight:700, color:"#666666", letterSpacing:0.4, marginBottom:8, cursor:"pointer" }}>My Signatures</div>
+              <div style={{ marginTop:6, background:"#fff", border:"1px solid #e4e4e4", borderRadius:14, padding:"24px 12px 14px" }}>
+                <div style={{ background:"#f3f3f3", borderRadius:999, height:10, overflow:"hidden", display:"flex", marginBottom:10 }}>
+                  {stats.map(s => (
+                    <div key={s.label} style={{ width:`${(s.value/total)*100}%`, background:s.color }} />
+                  ))}
+                </div>
+                <div style={{ display:"flex", flexWrap:"wrap", gap:"10px 18px", paddingBottom:16 }}>
+                  {stats.map(s => (
+                    <div key={s.label} style={{ display:"flex", alignItems:"center", gap:6 }}>
+                      <div style={{ width:8, height:8, borderRadius:99, background:s.color, flexShrink:0 }} />
+                      <span style={{ fontSize:10, color:"#666666", fontWeight:600 }}>{s.label}</span>
+                      <span style={{ fontSize:10, color:"#1a1a1a", fontWeight:700 }}>{s.value}</span>
+                    </div>
+                  ))}
+                </div>
+                <button style={{ width:"100%", border:"1.5px solid #e0e0e0", background:"#fff", color:"#555555", fontSize:13, fontWeight:700, padding:"12px 0", borderRadius:12, cursor:"pointer" }}>Send reminders</button>
               </div>
             </div>
           );
@@ -653,9 +1021,9 @@ function HomeScreen({ go, clients, signatures, forms8879, extensions, reminded, 
         {/* ── WIDGET 4 (was E-file) — merged into Needs Attention above ── */}
 
         {/* METRICS WIDGETS */}
-        <div style={{ marginTop:20 }}>
+        <div style={{ marginTop:28 }}>
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
-            <div style={{ fontSize:10, fontWeight:700, color:"#999999", letterSpacing:1.5 }}>METRICS</div>
+            <div style={{ fontSize:14, fontWeight:700, color:"#666666", letterSpacing:0.4 }}>Metrics</div>
             <span onClick={() => go(S.METRICS)} style={{ fontSize:11, color:"#555555", fontWeight:600, cursor:"pointer" }}>See all →</span>
           </div>
 
@@ -688,34 +1056,42 @@ function HomeScreen({ go, clients, signatures, forms8879, extensions, reminded, 
             const orgSent = clients.filter(c=>c.step>=4).length;
             const orgNot  = clients.length - orgSent;
             return (
-              <div style={{ display:"flex", gap:10, marginBottom:10 }}>
-                <div style={{ flex:1, background:"#fff", borderRadius:14, border:"1px solid #e4e4e4", padding:"12px 10px" }}>
-                  <div style={{ fontSize:11, fontWeight:700, color:"#555555", marginBottom:8 }}>Engagement Letter</div>
-                  <div style={{ display:"flex", justifyContent:"center", marginBottom:8 }}>
+              <div style={{ display:"flex", flexDirection:"column", gap:10, marginBottom:10 }}>
+                <div style={{ width:"100%", background:"#fff", borderRadius:14, border:"1px solid #e4e4e4", padding:"12px 10px" }}>
+                  <div style={{ fontSize:13, fontWeight:700, color:"#555555", marginBottom:4 }}>Engagement Letter</div>
+                  <div style={{ fontSize:11, color:"#888888", marginBottom:24 }}>Trend suggests stable completion pace; prioritize clients in the oldest bucket to keep SLAs on track.</div>
+                  <div style={{ display:"flex", alignItems:"center", gap:20, paddingLeft:32, paddingRight:32, marginTop:6 }}>
                     <MiniDonut centerLabel={`${Math.round((elSigned/elTotal)*100)}%`} centerSub="done"
                       segs={[{v:elSigned,c:"#7c6fcd"},{v:elPending,c:"#4fc3f7"},{v:1,c:"#ef5350"},{v:1,c:"#ffb300"}]} />
-                  </div>
-                  {[{l:"Completed",c:"#7c6fcd",v:elSigned},{l:"Started",c:"#4fc3f7",v:elPending},{l:"Cancelled",c:"#ef5350",v:1},{l:"Declined",c:"#ffb300",v:1}].map(s=>(
-                    <div key={s.l} style={{ display:"flex", alignItems:"center", gap:5, marginBottom:3 }}>
-                      <div style={{ width:7, height:7, borderRadius:99, background:s.c, flexShrink:0 }} />
-                      <span style={{ fontSize:9, color:"#666666", flex:1 }}>{s.l}</span>
-                      <span style={{ fontSize:9, fontWeight:700, color:"#1a1a1a" }}>{Math.round((s.v/elTotal)*100)}%</span>
+                    <div style={{ flex:1 }}>
+                      {[{l:"Completed",c:"#7c6fcd",v:elSigned},{l:"Started",c:"#4fc3f7",v:elPending},{l:"Cancelled",c:"#ef5350",v:1},{l:"Declined",c:"#ffb300",v:1}].map(s=>(
+                        <div key={s.l} style={{ display:"flex", alignItems:"center", gap:5, marginBottom:3 }}>
+                          <div style={{ width:7, height:7, borderRadius:99, background:s.c, flexShrink:0 }} />
+                          <span style={{ fontSize:9, color:"#666666", flex:1 }}>{s.l}</span>
+                          <span style={{ fontSize:9, fontWeight:700, color:"#1a1a1a" }}>{Math.round((s.v/elTotal)*100)}%</span>
+                        </div>
+                      ))}
                     </div>
-                  ))}
+                  </div>
+                  <button style={{ width:"100%", marginTop:12, border:"1.5px solid #e0e0e0", background:"#fff", color:"#555555", fontSize:12, fontWeight:700, padding:"10px 0", borderRadius:10, cursor:"pointer" }}>Send reminders</button>
                 </div>
-                <div style={{ flex:1, background:"#fff", borderRadius:14, border:"1px solid #e4e4e4", padding:"12px 10px" }}>
-                  <div style={{ fontSize:11, fontWeight:700, color:"#555555", marginBottom:8 }}>Organizer Review</div>
-                  <div style={{ display:"flex", justifyContent:"center", marginBottom:8 }}>
+                <div style={{ width:"100%", background:"#fff", borderRadius:14, border:"1px solid #e4e4e4", padding:"12px 10px" }}>
+                  <div style={{ fontSize:13, fontWeight:700, color:"#555555", marginBottom:4 }}>Organizer Review</div>
+                  <div style={{ fontSize:11, color:"#888888", marginBottom:24 }}>Based on current intake, organizer returns are expected to peak soon—plan reviewer bandwidth accordingly.</div>
+                  <div style={{ display:"flex", alignItems:"center", gap:20, paddingLeft:32, paddingRight:32, marginTop:6 }}>
                     <MiniDonut centerLabel={`${orgSent}`} centerSub="sent"
                       segs={[{v:orgNot,c:"#7c6fcd"},{v:orgSent,c:"#4fc3f7"}]} />
-                  </div>
-                  {[{l:"Not Sent",c:"#7c6fcd",v:orgNot},{l:"Sent to Review",c:"#4fc3f7",v:orgSent}].map(s=>(
-                    <div key={s.l} style={{ display:"flex", alignItems:"center", gap:5, marginBottom:3 }}>
-                      <div style={{ width:7, height:7, borderRadius:99, background:s.c, flexShrink:0 }} />
-                      <span style={{ fontSize:9, color:"#666666", flex:1 }}>{s.l}</span>
-                      <span style={{ fontSize:9, fontWeight:700, color:"#1a1a1a" }}>{Math.round((s.v/clients.length)*100)}%</span>
+                    <div style={{ flex:1 }}>
+                      {[{l:"Not Sent",c:"#7c6fcd",v:orgNot},{l:"Sent to Review",c:"#4fc3f7",v:orgSent}].map(s=>(
+                        <div key={s.l} style={{ display:"flex", alignItems:"center", gap:5, marginBottom:3 }}>
+                          <div style={{ width:7, height:7, borderRadius:99, background:s.c, flexShrink:0 }} />
+                          <span style={{ fontSize:9, color:"#666666", flex:1 }}>{s.l}</span>
+                          <span style={{ fontSize:9, fontWeight:700, color:"#1a1a1a" }}>{Math.round((s.v/clients.length)*100)}%</span>
+                        </div>
+                      ))}
                     </div>
-                  ))}
+                  </div>
+                  <button style={{ width:"100%", marginTop:12, border:"1.5px solid #e0e0e0", background:"#fff", color:"#555555", fontSize:12, fontWeight:700, padding:"10px 0", borderRadius:10, cursor:"pointer" }}>Check blockers</button>
                 </div>
               </div>
             );
@@ -723,7 +1099,8 @@ function HomeScreen({ go, clients, signatures, forms8879, extensions, reminded, 
 
           {/* E-file by Type — horizontal stacked bars */}
           <div style={{ background:"#fff", borderRadius:14, border:"1px solid #e4e4e4", padding:"12px 14px" }}>
-            <div style={{ fontSize:11, fontWeight:700, color:"#555555", marginBottom:8 }}>E-Filing by Type</div>
+            <div style={{ fontSize:13, fontWeight:700, color:"#555555", marginBottom:4 }}>E-Filing by Type</div>
+            <div style={{ fontSize:11, color:"#888888", marginBottom:24 }}>Predictive mix shows 1040s driving volume; queue capacity may need a small lift mid‑week.</div>
             <div style={{ display:"flex", gap:8, marginBottom:10 }}>
               {[{t:"1040",c:"#7c6fcd"},{t:"1041",c:"#26a69a"},{t:"1120",c:"#ef5350"}].map(x=>(
                 <div key={x.t} style={{ display:"flex", alignItems:"center", gap:4 }}>
@@ -754,9 +1131,382 @@ function HomeScreen({ go, clients, signatures, forms8879, extensions, reminded, 
                 </div>
               );
             })}
+            <button style={{ width:"100%", marginTop:12, border:"1.5px solid #e0e0e0", background:"#fff", color:"#555555", fontSize:12, fontWeight:700, padding:"10px 0", borderRadius:10, cursor:"pointer" }}>Fix and resubmit</button>
           </div>
 
         </div>
+
+
+      {/* Remind sheet */}
+      {remindSheet && (
+        <div style={{ position:"absolute", inset:0, zIndex:50 }}>
+          <div onClick={() => { setRemindSheet(null); setOverlayOpen(false); }} style={{ position:"absolute", inset:0, background:"rgba(0,0,0,0.35)" }} />
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              position:"absolute",
+              left:0,
+              right:0,
+              bottom:0,
+              background:"#fff",
+              borderRadius:"16px 16px 0 0",
+              padding:"14px 16px 18px",
+              boxShadow:"0 -12px 40px rgba(0,0,0,0.25)",
+            }}
+          >
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
+              <div style={{ fontSize:14, fontWeight:700, color:"#1a1a1a" }}>Send Reminder</div>
+              <button onClick={() => { setRemindSheet(null); setOverlayOpen(false); }} style={{ border:"none", background:"#f2f2f2", width:28, height:28, borderRadius:99, cursor:"pointer", color:"#555" }}>✕</button>
+            </div>
+
+            <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:10 }}>
+              <div style={{ width:36, height:36, borderRadius:99, background:"#2d2d2d", color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", fontWeight:700, fontSize:14 }}>{remindSheet.client?.name?.[0]}</div>
+              <div style={{ flex:1 }}>
+                <div style={{ fontWeight:700, fontSize:13, color:"#1a1a1a" }}>{remindSheet.client?.name}</div>
+                <div style={{ fontSize:11, color:"#888888", marginTop:2 }}>
+                  {remindSheet.client ? `${remindSheet.client.stepLabel} · Step ${remindSheet.client.step} of ${remindSheet.client.steps}` : "Stage unknown"}
+                </div>
+              </div>
+            </div>
+
+            <div style={{ background:"#f7f7f7", border:"1px solid #eeeeee", borderRadius:10, padding:"8px 10px", marginBottom:10 }}>
+              <div style={{ fontSize:9, fontWeight:700, color:"#999999", letterSpacing:1.2, marginBottom:4 }}>TRIGGER</div>
+              <div style={{ fontSize:12, color:"#555555" }}>{remindSheet.card?.what || "Action needed"}</div>
+            </div>
+
+            <div style={{ fontSize:10, fontWeight:700, color:"#999999", letterSpacing:1.2, marginBottom:6 }}>REASON</div>
+            <div style={{ display:"flex", flexWrap:"wrap", gap:8, marginBottom:48 }}>
+              {buildRemindReasons(remindSheet.card, remindSheet.client).map(r => {
+                const active = remindReason === r;
+                return (
+                  <button
+                    key={r}
+                    onClick={() => setRemindReason(r)}
+                    style={{
+                      border: active ? "1.5px solid #2d2d2d" : "1.5px solid #e0e0e0",
+                      background: active ? "#2d2d2d" : "#fff",
+                      color: active ? "#fff" : "#555555",
+                      borderRadius:999,
+                      padding:"7px 12px",
+                      fontSize:11,
+                      fontWeight:600,
+                      cursor:"pointer",
+                    }}
+                  >{r}</button>
+                );
+              })}
+            </div>
+
+            {remindReason === "Custom" && (
+              <input
+                value={remindCustom}
+                onChange={(e) => setRemindCustom(e.target.value)}
+                placeholder="Custom reason..."
+                style={{ width:"100%", border:"1.5px solid #e0e0e0", borderRadius:10, padding:"8px 10px", fontSize:12, marginBottom:16, outline:"none" }}
+              />
+            )}
+
+            <div style={{ display:"flex", gap:8, marginTop:6 }}>
+              <button onClick={() => { setRemindSheet(null); setOverlayOpen(false); }} style={{ flex:1, border:"1.5px solid #d8d8d8", borderRadius:12, padding:"12px 0", background:"#fff", color:"#555555", fontWeight:600, fontSize:13, cursor:"pointer" }}>Cancel</button>
+              <button
+                onClick={sendReminder}
+                disabled={remindReason === "Custom" && !remindCustom.trim()}
+                style={{
+                  flex:2,
+                  border:"none",
+                  borderRadius:12,
+                  padding:"12px 0",
+                  background: remindReason === "Custom" && !remindCustom.trim() ? "#d8d8d8" : "#2d2d2d",
+                  color: remindReason === "Custom" && !remindCustom.trim() ? "#888888" : "#fff",
+                  fontWeight:700,
+                  fontSize:13,
+                  cursor: remindReason === "Custom" && !remindCustom.trim() ? "default" : "pointer",
+                }}
+              >Send Reminder</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Refile sheet */}
+      {refileSheet && !refileFileSheet && (() => {
+        const info = getRejectInfo(refileSheet.ext);
+        return (
+          <div style={{ position:"absolute", inset:0, zIndex:50 }}>
+            <div onClick={() => { setRefileSheet(null); setOverlayOpen(false); }} style={{ position:"absolute", inset:0, background:"rgba(0,0,0,0.35)" }} />
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                position:"absolute",
+                left:0,
+                right:0,
+                bottom:0,
+                background:"#fff",
+                borderRadius:"16px 16px 0 0",
+                padding:"14px 16px 18px",
+                boxShadow:"0 -12px 40px rgba(0,0,0,0.25)",
+              }}
+            >
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
+                <div style={{ fontSize:14, fontWeight:700, color:"#1a1a1a" }}>Refile Extension</div>
+                <button onClick={() => { setRefileSheet(null); setOverlayOpen(false); }} style={{ border:"none", background:"#f2f2f2", width:28, height:28, borderRadius:99, cursor:"pointer", color:"#555" }}>✕</button>
+              </div>
+
+              <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:10 }}>
+                <div style={{ width:36, height:36, borderRadius:99, background:"#2d2d2d", color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", fontWeight:700, fontSize:14 }}>{refileSheet.client?.name?.[0]}</div>
+                <div style={{ flex:1 }}>
+                  <div style={{ fontWeight:700, fontSize:13, color:"#1a1a1a" }}>{refileSheet.client?.name}</div>
+                  <div style={{ fontSize:11, color:"#888888", marginTop:2 }}>
+                    {refileSheet.ext ? `${refileSheet.ext.jurisdiction} · Deadline ${refileSheet.ext.deadline}` : "Extension rejected"}
+                  </div>
+                </div>
+                <span style={{ fontSize:9, fontWeight:700, background:"#fdecea", color:"#b05a54", borderRadius:6, padding:"3px 8px", letterSpacing:0.3 }}>REJECTED</span>
+              </div>
+
+              <div style={{ background:"#f7f7f7", border:"1px solid #eeeeee", borderRadius:10, padding:"8px 10px", marginBottom:10 }}>
+                <div style={{ fontSize:9, fontWeight:700, color:"#999999", letterSpacing:1.2, marginBottom:4 }}>REJECTION</div>
+                <div style={{ fontSize:12, color:"#555555" }}>{info.reason}</div>
+                <div style={{ fontSize:10, color:"#999999", marginTop:4 }}>Code: {info.code}</div>
+
+                {/* Rejected file */}
+                {(() => {
+                  const doc = getRefileDoc(refileSheet.ext, refileSheet.client);
+                  if (!doc) return null;
+                  return (
+                    <div style={{ marginTop:10, borderTop:"1px solid #ededed", paddingTop:10, display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+                      <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+                        <div style={{ width:34, height:34, borderRadius:8, background:"#f2f2f2", display:"flex", alignItems:"center", justifyContent:"center", fontSize:16 }}>📄</div>
+                        <div>
+                          <div style={{ fontSize:12, fontWeight:600, color:"#1a1a1a" }}>{doc.name}</div>
+                          <div style={{ fontSize:10, color:"#999999", marginTop:2 }}>{doc.size} · {doc.date}</div>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => showToast({ msg:"Opening file…", auto:true })}
+                        style={{ border:"1px solid #d8d8d8", borderRadius:8, padding:"6px 10px", fontSize:11, fontWeight:600, background:"#fff", color:"#555555", cursor:"pointer" }}
+                      >Open</button>
+                    </div>
+                  );
+                })()}
+              </div>
+
+              <div style={{ border:"1px solid #eeeeee", borderRadius:10, padding:"8px 10px", marginBottom:12, background:"#fff" }}>
+                <div style={{ fontSize:10, fontWeight:700, color:"#999999", letterSpacing:1.2, marginBottom:6 }}>POTENTIAL SOLUTION</div>
+                <div style={{ fontSize:12, color:"#666666", lineHeight:1.5 }}>
+                  Verify taxpayer identifiers and submission metadata. Correct the mismatch, regenerate the extension, and resubmit before the deadline.
+                </div>
+              </div>
+
+              <div style={{ marginBottom:48 }} />
+
+              <div style={{ display:"flex", gap:8 }}>
+                <button onClick={() => { setRefileSheet(null); setOverlayOpen(false); }} style={{ flex:1, border:"1.5px solid #d8d8d8", borderRadius:12, padding:"12px 0", background:"#fff", color:"#555555", fontWeight:600, fontSize:13, cursor:"pointer" }}>Cancel</button>
+                <button
+                  onClick={() => !refileSubmitting && openRefileFileSheet()}
+                  style={{
+                    flex:2,
+                    border:"none",
+                    borderRadius:12,
+                    padding:"12px 0",
+                    background: refileSubmitting ? "#555555" : "#2d2d2d",
+                    color:"#fff",
+                    fontWeight:700,
+                    fontSize:13,
+                    cursor: refileSubmitting ? "default" : "pointer",
+                    display:"flex",
+                    alignItems:"center",
+                    justifyContent:"center",
+                    gap:8,
+                  }}
+                >
+                  {refileSubmitting ? (
+                    <span style={{ width:14, height:14, borderRadius:99, border:"2px solid rgba(255,255,255,0.35)", borderTopColor:"#fff", display:"inline-block", animation:"spin 1s linear infinite" }} />
+                  ) : (
+                    "Resubmit file"
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Refile file select */}
+      {refileSheet && refileFileSheet && (
+        <div style={{ position:"absolute", inset:0, zIndex:55 }}>
+          <div onClick={() => { setRefileFileSheet(false); setOverlayOpen(false); }} style={{ position:"absolute", inset:0, background:"rgba(0,0,0,0.35)" }} />
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              position:"absolute",
+              left:0,
+              right:0,
+              bottom:0,
+              background:"#fff",
+              borderRadius:"16px 16px 0 0",
+              padding:"14px 16px 18px",
+              boxShadow:"0 -12px 40px rgba(0,0,0,0.25)",
+            }}
+          >
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
+              <div style={{ fontSize:14, fontWeight:700, color:"#1a1a1a" }}>Select file</div>
+              <button onClick={() => { setRefileFileSheet(false); setOverlayOpen(false); }} style={{ border:"none", background:"#f2f2f2", width:28, height:28, borderRadius:99, cursor:"pointer", color:"#555" }}>✕</button>
+            </div>
+
+            <div
+              onClick={handleRefileFileSelect}
+              style={{ background:"#fff", border:"1px solid #e0e0e0", borderRadius:12, padding:"12px", display:"flex", alignItems:"center", justifyContent:"space-between", cursor:"pointer" }}
+            >
+              <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+                <div style={{ width:34, height:34, borderRadius:8, background:"#f2f2f2", display:"flex", alignItems:"center", justifyContent:"center", fontSize:16 }}>📄</div>
+                <div>
+                  <div style={{ fontSize:12, fontWeight:600, color:"#1a1a1a" }}>Extension resubmission.pdf</div>
+                  <div style={{ fontSize:10, color:"#999999", marginTop:2 }}>128 KB · Today</div>
+                </div>
+              </div>
+              <button style={{ border:"1px solid #d8d8d8", borderRadius:8, padding:"6px 10px", fontSize:11, fontWeight:600, background:"#fff", color:"#555555", cursor:"pointer" }}>Choose</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* E‑sign sheet */}
+      {eSignSheet && !eSignDocOpen && (() => {
+        const f = eSignSheet.form;
+        const docName = f ? `Form 8879 — ${f.jurisdiction}` : "Form 8879 Authorization";
+        return (
+          <div style={{ position:"absolute", inset:0, zIndex:50 }}>
+            <div onClick={() => { setESignSheet(null); setOverlayOpen(false); }} style={{ position:"absolute", inset:0, background:"rgba(0,0,0,0.35)" }} />
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                position:"absolute",
+                left:0,
+                right:0,
+                bottom:0,
+                background:"#fff",
+                borderRadius:"16px 16px 0 0",
+                padding:"14px 16px 18px",
+                boxShadow:"0 -12px 40px rgba(0,0,0,0.25)",
+              }}
+            >
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
+                <div style={{ fontSize:14, fontWeight:700, color:"#1a1a1a" }}>Sign on Phone</div>
+                <button onClick={() => { setESignSheet(null); setOverlayOpen(false); }} style={{ border:"none", background:"#f2f2f2", width:28, height:28, borderRadius:99, cursor:"pointer", color:"#555" }}>✕</button>
+              </div>
+
+              <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:10 }}>
+                <div style={{ width:36, height:36, borderRadius:99, background:"#2d2d2d", color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", fontWeight:700, fontSize:14 }}>{eSignSheet.client?.name?.[0]}</div>
+                <div style={{ flex:1 }}>
+                  <div style={{ fontWeight:700, fontSize:13, color:"#1a1a1a" }}>{eSignSheet.client?.name}</div>
+                  <div style={{ fontSize:11, color:"#888888", marginTop:2 }}>{eSignSheet.form ? `E‑file authorization · ${eSignSheet.form.jurisdiction}` : "E‑file authorization"}</div>
+                </div>
+                <span style={{ fontSize:9, fontWeight:700, background:"#e8f0ff", color:"#3b5bcc", borderRadius:6, padding:"3px 8px", letterSpacing:0.3 }}>MOBILE</span>
+              </div>
+
+              <div style={{ background:"#f7f7f7", border:"1px solid #eeeeee", borderRadius:10, padding:"8px 10px", marginBottom:10 }}>
+                <div style={{ fontSize:9, fontWeight:700, color:"#999999", letterSpacing:1.2, marginBottom:4 }}>PURPOSE</div>
+                <div style={{ fontSize:12, color:"#555555" }}>Client signs Form 8879 on their phone to authorize IRS e‑file.</div>
+              </div>
+
+              <div style={{ border:"1px solid #e8e8e8", borderRadius:12, padding:"10px 12px", display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:48, background:"#fff" }}>
+                <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+                  <div style={{ width:34, height:34, borderRadius:8, background:"#f2f2f2", display:"flex", alignItems:"center", justifyContent:"center", fontSize:16 }}>📄</div>
+                  <div>
+                    <div style={{ fontSize:12, fontWeight:600, color:"#1a1a1a" }}>{docName}</div>
+                    <div style={{ fontSize:10, color:"#999999", marginTop:2 }}>Ready for mobile signing · 1 signer</div>
+                  </div>
+                </div>
+                <button
+                  onClick={() => showToast({ msg:"Opening document…", auto:true })}
+                  style={{ border:"1px solid #d8d8d8", borderRadius:8, padding:"6px 10px", fontSize:11, fontWeight:600, background:"#fff", color:"#555555", cursor:"pointer" }}
+                >Preview</button>
+              </div>
+
+              <div style={{ display:"flex", gap:8 }}>
+                <button onClick={() => { setESignSheet(null); setOverlayOpen(false); }} style={{ flex:1, border:"1.5px solid #d8d8d8", borderRadius:12, padding:"12px 0", background:"#fff", color:"#555555", fontWeight:600, fontSize:13, cursor:"pointer" }}>Cancel</button>
+                <button
+                  onClick={() => !eSignSubmitting && openESignDoc()}
+                  style={{
+                    flex:2,
+                    border:"none",
+                    borderRadius:12,
+                    padding:"12px 0",
+                    background: eSignSubmitting ? "#555555" : "#2d2d2d",
+                    color:"#fff",
+                    fontWeight:700,
+                    fontSize:13,
+                    cursor: eSignSubmitting ? "default" : "pointer",
+                    display:"flex",
+                    alignItems:"center",
+                    justifyContent:"center",
+                    gap:8,
+                  }}
+                >
+                  {eSignSubmitting ? (
+                    <>
+                      <span style={{ width:14, height:14, borderRadius:99, border:"2px solid rgba(255,255,255,0.35)", borderTopColor:"#fff", display:"inline-block", animation:"spin 1s linear infinite" }} />
+                      Waiting for signature…
+                    </>
+                  ) : (
+                    "Start mobile signing"
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* E‑sign document full screen */}
+      {eSignSheet && eSignDocOpen && (() => {
+        const f = eSignSheet.form;
+        const docName = f ? `Form 8879 — ${f.jurisdiction}` : "Form 8879 Authorization";
+        const signsLeft = 2 - (eSignSigned.first?1:0) - (eSignSigned.second?1:0);
+        const pageImg = "/assets/lease-agreement.svg";
+        const SignatureMark = ({}) => (
+          <svg width="120" height="40" viewBox="0 0 120 40" xmlns="http://www.w3.org/2000/svg">
+            <path d="M6 28 C16 10, 30 36, 42 18 S66 20, 80 12 S98 16, 114 8" fill="none" stroke="#1f2937" strokeWidth="3" strokeLinecap="round"/>
+            <path d="M18 30 C30 34, 52 34, 70 28" fill="none" stroke="#1f2937" strokeWidth="2" strokeLinecap="round"/>
+          </svg>
+        );
+        return (
+          <div style={{ position:"absolute", inset:0, zIndex:60, background:"#f4f4f4", display:"flex", flexDirection:"column" }}>
+            <div style={{ background:"#2d2d2d", padding:"12px 16px", display:"flex", alignItems:"center", justifyContent:"space-between", color:"#fff", flexShrink:0 }}>
+              <div style={{ fontWeight:700, fontSize:14 }}>{docName}</div>
+              <button onClick={() => setESignDocOpen(false)} style={{ border:"none", background:"rgba(255,255,255,0.15)", width:30, height:30, borderRadius:99, cursor:"pointer", color:"#fff", fontSize:16 }}>✕</button>
+            </div>
+
+            <div style={{ flex:1, overflowY:"auto", padding:"14px 16px 140px" }}>
+              {[1,2].map((p,i)=>(
+                <div key={p} ref={i===1 ? eSignSecondRef : null} style={{ position:"relative", background:"#fff", border:"1px solid #e6e6e6", borderRadius:12, padding:"10px", marginBottom:16 }}>
+                  <img src={pageImg} alt="Document page" style={{ width:"100%", height:"auto", display:"block", borderRadius:8 }} />
+                  {i===0 && eSignSigned.first && (
+                    <div style={{ position:"absolute", right:56, bottom:72, animation:"signLand 0.35s ease-out" }}>
+                      <SignatureMark />
+                    </div>
+                  )}
+                  {i===1 && eSignSigned.second && (
+                    <div style={{ position:"absolute", right:56, bottom:72, animation:"signLand 0.35s ease-out" }}>
+                      <SignatureMark />
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            <div style={{ position:"absolute", left:0, right:0, bottom:0, background:"#fff", padding:"10px 16px 16px", boxShadow:"0 -6px 20px rgba(0,0,0,0.08)" }}>
+              <div style={{ fontSize:11, color:"#777777", marginBottom:8 }}>{signsLeft} signature{signsLeft>1?"s":""} left</div>
+              <button
+                onClick={eSignSigned.first ? handleESignSecond : handleESignFirst}
+                style={{ width:"100%", border:"none", borderRadius:12, padding:"12px 0", background:"#2d2d2d", color:"#fff", fontWeight:700, fontSize:13, cursor:"pointer" }}
+              >
+                Sign
+              </button>
+            </div>
+          </div>
+        );
+      })()}
 
       </div>
     </div>
@@ -931,10 +1681,11 @@ function ClientsScreen({ go, clients, reminded, remind }) {
 // ══════════════════════════════════════════════════════════════════
 function ClientDetailScreen({ go, ctx, reminded, remind, docs, chats }) {
   const c = ctx.client; if (!c) return null;
+  const backTarget = ctx?.from === S.HOME ? S.HOME : S.CLIENTS;
   const clientDocs = docs.filter(d => d.client === c.name);
   return (
     <div style={{ flex:1 }}>
-      <Header title={c.name} sub={c.type} back onBack={() => go(S.CLIENTS)} />
+      <Header title={c.name} sub={c.type} back onBack={() => go(backTarget)} />
       <div style={{ padding:"12px 18px 20px" }}>
 
         {/* Info card */}
@@ -1144,6 +1895,7 @@ function ELStatusScreen({ go, clients, reminded, remind, showToast }) {
             </div>
           );
         })}
+
       </div>
     </div>
   );
@@ -1211,7 +1963,7 @@ function ELWizardScreen({ go, ctx, clients, showToast }) {
   );
 
   const NavButtons = ({ onNext, nextLabel="Next", disabled=false }) => (
-    <div style={{ display:"flex", gap:8, padding:"14px 18px" }}>
+    <div style={{ display:"flex", gap:8, padding:"14px 18px", flexShrink:0 }}>
       <button onClick={() => step===0 ? go(S.EL_STATUS) : setStep(s=>s-1)}
         style={{ flex:1, border:"1px solid #d8d8d8", borderRadius:10, padding:"11px", fontSize:13, fontWeight:600, background:"#fff", color:"#555555", cursor:"pointer" }}>
         {step===0 ? "Cancel" : "← Back"}
@@ -1250,7 +2002,7 @@ function ELWizardScreen({ go, ctx, clients, showToast }) {
       <Header title="Create Letter" sub={templates.find(t=>t.id===template)?.name || "New EL"} back onBack={() => step===0 ? go(S.EL_STATUS) : setStep(s=>s-1)} />
       <Progress />
       <StepLabel />
-      <div style={{ flex:1, overflowY:"auto", padding:"12px 18px 0" }}>
+      <div style={{ flex:1, minHeight:0, overflowY:"auto", padding:"12px 18px 0" }}>
 
         {/* ── STEP 0: Template Select ── */}
         {step === 0 && (
@@ -1444,7 +2196,7 @@ function ELWizardScreen({ go, ctx, clients, showToast }) {
       {step < 5 ? (
         <NavButtons disabled={!canNext()} onNext={() => setStep(s=>s+1)} />
       ) : (
-        <div style={{ display:"flex", gap:8, padding:"14px 18px" }}>
+        <div style={{ display:"flex", gap:8, padding:"14px 18px", flexShrink:0 }}>
           <button onClick={() => setStep(s=>s-1)} style={{ flex:1, border:"1px solid #d8d8d8", borderRadius:10, padding:"11px", fontSize:13, fontWeight:600, background:"#fff", color:"#555555", cursor:"pointer" }}>← Back</button>
           <button onClick={() => go(S.EL_STATUS)} style={{ flex:1, border:"1px solid #d8d8d8", borderRadius:10, padding:"11px", fontSize:13, fontWeight:600, background:"#fff", color:"#555555", cursor:"pointer" }}>Draft</button>
           <button onClick={handleSend} disabled={sending} style={{ flex:2, border:"none", borderRadius:10, padding:"11px", fontSize:13, fontWeight:700, background: sending?"#555":"#2d2d2d", color:"#fff", cursor: sending?"default":"pointer" }}>
@@ -1510,6 +2262,10 @@ function MySignaturesScreen({ go, signatures, signed }) {
 function SignDocScreen({ go, ctx, sign, signed }) {
   const s = ctx.sig; if (!s) return null;
   const isSigned = signed.includes(s.id);
+  const handleSign = () => {
+    sign(s.id);
+    if (s.type === "EL") go(S.HOME);
+  };
   return (
     <div style={{ flex:1 }}>
       <Header title="Review & Sign" sub={s.client} back onBack={() => go(S.MY_SIGNATURES)} />
@@ -1531,7 +2287,7 @@ function SignDocScreen({ go, ctx, sign, signed }) {
           </div>
         </div>
         {!isSigned
-          ? <button onClick={() => sign(s.id)} style={{ width:"100%", border:"none", borderRadius:12, padding:14, background:"#2d2d2d", color:"#fff", fontWeight:700, fontSize:14, cursor:"pointer" }}>Sign Document</button>
+          ? <button onClick={handleSign} style={{ width:"100%", border:"none", borderRadius:12, padding:14, background:"#2d2d2d", color:"#fff", fontWeight:700, fontSize:14, cursor:"pointer" }}>Sign Document</button>
           : <button style={{ width:"100%", border:"none", borderRadius:12, padding:14, background:"#f0f0f0", color:"#4a4a4a", fontWeight:700, fontSize:14, cursor:"default" }}>✓ Signed</button>
         }
       </div>
