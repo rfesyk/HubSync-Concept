@@ -18,12 +18,24 @@ const S = {
   MY_SIGNATURES: "my_signatures",
   SIGN_DOC: "sign_doc",
   FORM_8879: "form_8879",
+  STAFFING: "staffing",
   BATCH_EXT: "batch_ext",
   BATCH_EXT_STATUS: "batch_ext_status",
   AUDIT_LOG: "audit_log",
 };
 
 const TAB = { HOME: "home", CLIENTS: "clients", MESSAGING: "messaging", DOCUMENTS: "dms" };
+
+const UI = {
+  brand: "#0a3d86",
+  brandSoft: "#d9e6ff",
+  surface: "#f4f4f7",
+  card: "#ffffff",
+  border: "#e1e3e8",
+  text: "#101423",
+  muted: "#6b7280",
+  accent: "#1e66f5",
+};
 
 // ─── Mock Data ────────────────────────────────────────────────────
 const clients = [
@@ -136,6 +148,42 @@ const docs = [
 
 const stepLabels = ["Sign EL","Request List","Upload Docs","Tax Organizer","Review Return","Sign Return","Payments"];
 
+const buildStaffingRows = (list) => {
+  const workflowByStep = [
+    "Tax · EL",
+    "Tax · Request List",
+    "Tax · Upload",
+    "Tax · Organizer",
+    "Tax · Review",
+    "Tax · Sign Return",
+    "Tax · Payments",
+  ];
+  const partners = ["Ken Yoder", "Sarah Kleinfelter", "Alex Reed", "Maya Patel"];
+  const offices = ["Chicago", "Detroit", "Denver", "Charlotte"];
+  const regions = { Chicago:"Midwest", Detroit:"Midwest", Denver:"West", Charlotte:"Southeast" };
+  const workflowColors = ["#f59e0b", "#84cc16", "#0ea5e9", "#14b8a6", "#ef4444", "#6366f1", "#06b6d4"];
+
+  return list.map((c, idx) => {
+    const office = offices[(idx + 1) % offices.length];
+    const status = c.blockedBy === "client"
+      ? "Awaiting Client Info"
+      : c.step >= 5
+        ? "QC Review"
+        : "Preparation";
+    return {
+      id: c.id,
+      client: c.name,
+      workflow: workflowByStep[Math.max(0, (c.step || 1) - 1)],
+      workflowColor: workflowColors[Math.max(0, (c.step || 1) - 1)],
+      partner: partners[idx % partners.length],
+      office,
+      region: regions[office] || "Midwest",
+      taxYear: 2025,
+      status,
+    };
+  });
+};
+
 const auditLog = [
   { id:1, action:"Document uploaded", detail:"W-2 Workbook.pdf", who:"Client", time:"10:24 today" },
   { id:2, action:"Reminder sent",     detail:"Upload documents reminder", who:"CPA", time:"9:00 today" },
@@ -159,7 +207,7 @@ const RiskDot = ({ risk }) => {
 const StepBar = ({ step, total }) => (
   <div style={{ display:"flex", gap:2 }}>
     {Array.from({length:total}).map((_,i) => (
-      <div key={i} style={{ flex:1, height:3, borderRadius:99, background: i < step ? "#2d2d2d" : "#d8d8d8" }} />
+      <div key={i} style={{ flex:1, height:3, borderRadius:99, background: i < step ? UI.brand : "#d8d8d8" }} />
     ))}
   </div>
 );
@@ -177,7 +225,7 @@ const StatusPill = ({ status }) => {
   return <span style={{ fontSize:10, fontWeight:700, background:s.bg, color:s.c, borderRadius:4, padding:"2px 7px" }}>{s.label}</span>;
 };
 
-const Btn = ({ label, color="#2d2d2d", textColor="#fff", outline, onClick, full, small }) => (
+const Btn = ({ label, color=UI.brand, textColor="#fff", outline, onClick, full, small }) => (
   <button onClick={onClick} style={{
     border: outline ? `1.5px solid ${color}` : "none",
     background: outline ? "transparent" : color,
@@ -190,22 +238,32 @@ const Btn = ({ label, color="#2d2d2d", textColor="#fff", outline, onClick, full,
 );
 
 // ─── Header ───────────────────────────────────────────────────────
+const HeaderIcons = () => (
+  <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+    <button style={{ border:"none", background:"rgba(255,255,255,0.16)", width:28, height:28, borderRadius:99, cursor:"pointer", color:"#fff", fontSize:13, display:"flex", alignItems:"center", justifyContent:"center", padding:0 }}>🔔</button>
+    <button style={{ border:"none", background:"rgba(255,255,255,0.16)", width:28, height:28, borderRadius:99, cursor:"pointer", color:"#fff", fontSize:14, display:"flex", alignItems:"center", justifyContent:"center", padding:0 }}>⚙</button>
+  </div>
+);
+
 const Header = ({ title, sub, back, onBack, right, search, onSearch, searchPh }) => (
-  <div style={{ background:"#2d2d2d", flexShrink:0 }}>
+  <div style={{ background:UI.brand, flexShrink:0, paddingBottom: search !== undefined ? 14 : 0 }}>
     <div style={{ padding:"12px 18px 10px", display:"flex", alignItems:"center", gap:10 }}>
       {back && (
-        <button onClick={onBack} style={{ border:"none", background:"rgba(255,255,255,0.15)", width:30, height:30, borderRadius:99, cursor:"pointer", color:"#fff", fontSize:15, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>←</button>
+        <button onClick={onBack} style={{ border:"none", background:"rgba(255,255,255,0.18)", width:30, height:30, borderRadius:99, cursor:"pointer", color:"#fff", fontSize:15, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>←</button>
       )}
       <div style={{ flex:1 }}>
-        <div style={{ fontWeight:700, fontSize:17, color:"#fff", lineHeight:1.2 }}>{title}</div>
-        {sub && <div style={{ fontSize:11, color:"#b0b0b0", marginTop:1 }}>{sub}</div>}
+        <div style={{ fontWeight:700, fontSize:20, color:"#fff", lineHeight:1.2 }}>{title}</div>
+        {sub && <div style={{ fontSize:11, color: UI.brandSoft, marginTop:1 }}>{sub}</div>}
       </div>
-      {right}
+      <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+        {right}
+        <HeaderIcons />
+      </div>
     </div>
     {search !== undefined && (
-      <div style={{ margin:"0 18px 14px", background:"rgba(255,255,255,0.12)", borderRadius:9, display:"flex", alignItems:"center", padding:"7px 12px", gap:7 }}>
-        <span style={{ color:"#b0b0b0", fontSize:12 }}>🔍</span>
-        <input value={search} onChange={e => onSearch(e.target.value)} placeholder={searchPh||"Search..."} style={{ background:"none", border:"none", outline:"none", color:"#fff", fontSize:13, flex:1 }} />
+      <div style={{ margin:"0 18px", background:"#fff", borderRadius:10, border:"1px solid rgba(255,255,255,0.35)", display:"flex", alignItems:"center", padding:"8px 12px", gap:7 }}>
+        <span style={{ color: UI.muted, fontSize:12 }}>🔍</span>
+        <input value={search} onChange={e => onSearch(e.target.value)} placeholder={searchPh||"Search..."} style={{ background:"none", border:"none", outline:"none", color: UI.text, fontSize:13, flex:1 }} />
       </div>
     )}
   </div>
@@ -380,11 +438,11 @@ export default function App() {
 
   return (
     <div style={{ minHeight:"100vh", background:"#c0c0c0", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"'Segoe UI',system-ui,sans-serif" }}>
-      <div style={{ width:375, height:780, background:"#f0f0f0", borderRadius:40, boxShadow:"0 32px 80px rgba(0,0,0,0.25)", overflow:"hidden", display:"flex", flexDirection:"column", position:"relative" }}>
+      <div style={{ width:375, height:780, background:UI.surface, borderRadius:40, boxShadow:"0 32px 80px rgba(0,0,0,0.25)", overflow:"hidden", display:"flex", flexDirection:"column", position:"relative" }}>
         <style>{`@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}@keyframes signLand{0%{transform:translateY(-8px) scale(0.96);opacity:0}100%{transform:translateY(0) scale(1);opacity:1}}@keyframes metricPop{0%{transform:scale(1.08);opacity:.6}100%{transform:scale(1);opacity:1}}`}</style>
 
         {/* Status bar */}
-        <div style={{ background:"#2d2d2d", padding:"10px 22px 6px", display:"flex", justifyContent:"space-between", flexShrink:0 }}>
+        <div style={{ background:UI.brand, padding:"10px 22px 6px", display:"flex", justifyContent:"space-between", flexShrink:0 }}>
           <span style={{ color:"#fff", fontSize:12, fontWeight:600 }}>9:41</span>
           <div style={{ display:"flex", gap:4, alignItems:"center" }}>
             <span style={{ color:"#b0b0b0", fontSize:10 }}>●●●</span>
@@ -409,6 +467,7 @@ export default function App() {
           {screen === S.MY_SIGNATURES     && <MySignaturesScreen {...screenProps} />}
           {screen === S.SIGN_DOC          && <SignDocScreen     {...screenProps} />}
           {screen === S.FORM_8879         && <Form8879Screen    {...screenProps} />}
+          {screen === S.STAFFING          && <StaffingScreen    {...screenProps} />}
           {screen === S.BATCH_EXT         && <BatchExtScreen    {...screenProps} />}
           {screen === S.BATCH_EXT_STATUS  && <BatchExtStatusScreen {...screenProps} />}
           {screen === S.METRICS            && <MetricsScreen      {...screenProps} />}
@@ -458,6 +517,7 @@ export default function App() {
 // ══════════════════════════════════════════════════════════════════
 function HomeScreen({ go, clients, signatures, forms8879, extensions, reminded, remind, undoRemind, showToast, hideToast, setOverlayOpen, signed }) {
   const [workScope, setWorkScope] = useState("my"); // "my" | "all" | "favorites"
+  const [selectedClientId, setSelectedClientId] = useState(null);
   const [workScopeSheetOpen, setWorkScopeSheetOpen] = useState(false);
   const [cardExiting, setCardExiting] = useState(false);
   const [exitDir, setExitDir]       = useState(null); // "skip" | "action"
@@ -474,16 +534,31 @@ function HomeScreen({ go, clients, signatures, forms8879, extensions, reminded, 
   const [eSignSigned, setESignSigned] = useState({ first:false, second:false });
   const [awaitingCount, setAwaitingCount] = useState(0);
   const [queueKeys, setQueueKeys] = useState([]);
-  const [queueInitialized, setQueueInitialized] = useState(false);
   const eSignSecondRef = useRef(null);
+  const favoriteClientIds = [1, 3, 6, 10];
+
+  const baseScopedClients =
+    workScope === "all"
+      ? clients
+      : workScope === "favorites"
+        ? clients.filter((c) => favoriteClientIds.includes(c.id))
+        : clients;
+  const scopedClients = selectedClientId
+    ? baseScopedClients.filter((c) => c.id === selectedClientId)
+    : baseScopedClients;
+  const scopedClientNames = new Set(scopedClients.map((c) => c.name));
+  const scopedSignatures = signatures.filter((s) => scopedClientNames.has(s.client));
+  const scopedForms8879 = forms8879.filter((f) => scopedClientNames.has(f.client));
+  const scopedExtensions = extensions.filter((e) => scopedClientNames.has(e.client));
+  const selectedClient = clients.find((c) => c.id === selectedClientId) || null;
 
   const buildFocusCards = () => {
     const allCards = [];
-    clients
+    scopedClients
       .filter(c => c.blockedBy === "client")
       .map(c => {
-        const sig  = signatures.find(s => s.client === c.name);
-        const f8   = forms8879.find(f => f.client === c.name && f.status === "pending");
+        const sig  = scopedSignatures.find(s => s.client === c.name);
+        const f8   = scopedForms8879.find(f => f.client === c.name && f.status === "pending");
         const isEL = c.elStatus !== "signed";
         const what = isEL ? "EL not signed"
                    : f8  ? "8879 awaiting client"
@@ -506,8 +581,8 @@ function HomeScreen({ go, clients, signatures, forms8879, extensions, reminded, 
       .sort((a,b) => b.days - a.days)
       .forEach(r => allCards.push(r));
 
-    forms8879.filter(f => f.status === "failed").forEach(f => {
-      const cl = clients.find(c => c.name === f.client);
+    scopedForms8879.filter(f => f.status === "failed").forEach(f => {
+      const cl = scopedClients.find(c => c.name === f.client);
       allCards.push({
         key: `kba-${f.id}`, client: f.client, clientObj: cl,
         what: "E‑signature needed",
@@ -516,8 +591,8 @@ function HomeScreen({ go, clients, signatures, forms8879, extensions, reminded, 
         cta: "Sign", ctaFn: () => cl ? go(S.CLIENT_DETAIL, { client: cl, from:S.HOME }) : go(S.FORM_8879),
       });
     });
-    extensions.filter(e => e.status === "rejected").forEach(e => {
-      const cl = clients.find(c => c.name === e.client);
+    scopedExtensions.filter(e => e.status === "rejected").forEach(e => {
+      const cl = scopedClients.find(c => c.name === e.client);
       allCards.push({
         key: `ext-${e.id}`, client: e.client, clientObj: cl,
         what: "Extension rejected",
@@ -710,15 +785,27 @@ function HomeScreen({ go, clients, signatures, forms8879, extensions, reminded, 
     setWorkScopeSheetOpen(false);
     setOverlayOpen(false);
   };
+  const myClients = clients.slice(0, 6).map((c) => {
+    const signPending = signatures.filter((s) => s.client === c.name && !signed.includes(s.id)).length;
+    const formPending = forms8879.filter((f) => f.client === c.name && f.status === "pending").length;
+    const formFailed = forms8879.filter((f) => f.client === c.name && f.status === "failed").length;
+    const extRejected = extensions.filter((e) => e.client === c.name && e.status === "rejected").length;
+    // Count blockers only for hard failures or very early-stage client dependencies.
+    const blockers =
+      formFailed +
+      extRejected +
+      (c.elStatus !== "signed" ? 1 : 0) +
+      (c.blockedBy === "client" && c.step <= 2 ? 1 : 0);
+    const critical = formFailed + extRejected;
+    return { ...c, signPending: signPending + formPending, blockers, critical };
+  });
+  const currentScopeKey = `${workScope}:${selectedClientId || "all"}`;
 
   const allCards = buildFocusCards();
   const cardMap = Object.fromEntries(allCards.map(c => [c.key, c]));
   useEffect(() => {
-    if (!queueInitialized && allCards.length > 0) {
-      setQueueKeys(allCards.map(c => c.key));
-      setQueueInitialized(true);
-    }
-  }, [allCards.length, queueInitialized]);
+    setQueueKeys(allCards.map(c => c.key));
+  }, [currentScopeKey]);
   const remainingCards = queueKeys.map(k => cardMap[k]).filter(Boolean);
   const blockersCount = remainingCards.length;
   const criticalCount = remainingCards.filter(c => c.critical).length;
@@ -750,14 +837,42 @@ function HomeScreen({ go, clients, signatures, forms8879, extensions, reminded, 
     }
   }, [criticalCount, metricHide.critical, metricClosing.critical]);
 
+  const scopeLabel = selectedClient
+    ? selectedClient.name
+    : workScope === "my"
+      ? "My clients"
+      : workScope === "all"
+        ? "All work"
+        : "Favorites";
+
+  const radioControl = (isActive) => (
+    <span
+      style={{
+        width:16,
+        height:16,
+        borderRadius:99,
+        border:`1.5px solid ${isActive ? "#2d2d2d" : "#c9c9c9"}`,
+        display:"inline-flex",
+        alignItems:"center",
+        justifyContent:"center",
+        flexShrink:0,
+        background:"#fff",
+      }}
+    >
+      {isActive && <span style={{ width:8, height:8, borderRadius:99, background:"#2d2d2d" }} />}
+    </span>
+  );
+
   return (
     <div style={{ flex:1 }}>
       {/* Dark header — title + metrics */}
-      <div style={{ background:"#2d2d2d", padding:"10px 18px 18px" }}>
-        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+      <div style={{ background:UI.brand, padding:"10px 18px 18px" }}>
+        <div style={{ display:"flex", alignItems:"center", gap:10, minHeight:30 }}>
           <button
             onClick={openWorkScopeSheet}
             style={{
+              flex:1,
+              minWidth:0,
               border:"none",
               background:"transparent",
               color:"#fff",
@@ -765,15 +880,19 @@ function HomeScreen({ go, clients, signatures, forms8879, extensions, reminded, 
               fontWeight:700,
               display:"inline-flex",
               alignItems:"center",
+              justifyContent:"flex-start",
               gap:7,
               padding:0,
               cursor:"pointer",
             }}
           >
-            {workScope === "my" ? "My work" : workScope === "all" ? "All work" : "Favorites"}
+            <span style={{ overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{scopeLabel}</span>
             <span style={{ fontSize:13, color:"#cfcfcf", lineHeight:1 }}>▾</span>
           </button>
-          <button onClick={() => go(S.SETTINGS)} style={{ border:"none", background:"transparent", width:32, height:32, borderRadius:99, cursor:"pointer", color:"#d0d0d0", fontSize:22, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>⚙</button>
+          <div style={{ display:"flex", alignItems:"center", gap:8, flexShrink:0 }}>
+            <button style={{ border:"none", background:"rgba(255,255,255,0.16)", width:28, height:28, borderRadius:99, cursor:"pointer", color:"#fff", fontSize:13, display:"flex", alignItems:"center", justifyContent:"center", padding:0 }}>🔔</button>
+            <button onClick={() => go(S.SETTINGS)} style={{ border:"none", background:"rgba(255,255,255,0.16)", width:28, height:28, borderRadius:99, cursor:"pointer", color:"#fff", fontSize:14, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, padding:0 }}>⚙</button>
+          </div>
         </div>
 
         <div style={{ padding:"0 0 0" }}>
@@ -908,15 +1027,13 @@ function HomeScreen({ go, clients, signatures, forms8879, extensions, reminded, 
                           <StepBar step={c.step} total={c.steps} />
                           <div style={{ height:1, background:"#f0f0f0", marginTop:10 }} />
                           <div style={{ display:"flex", alignItems:"center", gap:10, marginTop:10 }}>
-                            <div style={{ width:36, height:36, borderRadius:99, background:"#2d2d2d", color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", fontWeight:700, fontSize:15, flexShrink:0 }}>
+                            <div style={{ width:36, height:36, borderRadius:99, background:"#E9F1FF", color:"#0065FF", display:"flex", alignItems:"center", justifyContent:"center", fontWeight:700, fontSize:15, flexShrink:0 }}>
                               {card.client[0]}
                             </div>
                             <div>
                               <div style={{ fontSize:13, fontWeight:600, color:"#1a1a1a", lineHeight:1.2 }}>{card.client}</div>
-                              <div style={{ fontSize:11, color:"#888888", marginTop:3 }}>{c.stepLabel}</div>
-                              <div style={{ display:"flex", gap:5, alignItems:"center", marginTop:3 }}>
+                              <div style={{ display:"flex", gap:5, alignItems:"center", marginTop:6 }}>
                                 {c && <TypeBadge type={c.type} />}
-                                {c && <RiskDot risk={c.risk} />}
                               </div>
                             </div>
                           </div>
@@ -944,7 +1061,7 @@ function HomeScreen({ go, clients, signatures, forms8879, extensions, reminded, 
                             : card.cta === "Sign" ? openESignSheet(card, c)
                             : advanceCard("action", card.ctaFn, true)
                           )}
-                          style={{ flex:1, border:"none", borderRadius:12, padding:"12px 0", background:"#2d2d2d", color:"#fff", fontWeight:700, fontSize:13, cursor:"pointer" }}
+                          style={{ flex:1, border:"none", borderRadius:12, padding:"12px 0", background:"#0065FF", color:"#fff", fontWeight:700, fontSize:13, cursor:"pointer" }}
                         >{card.cta}</button>
                       </div>
 
@@ -962,7 +1079,7 @@ function HomeScreen({ go, clients, signatures, forms8879, extensions, reminded, 
 
         {(() => {
           const stageCounts = stepLabels.map((label, i) =>
-            clients.filter(c => c.step === i + 1).length
+            scopedClients.filter(c => c.step === i + 1).length
           );
           const maxCount = Math.max(...stageCounts, 1);
           const shortLabels = ["Sign EL","Req List","Upload","Organizer","Review","Sign Ret.","Payments"];
@@ -971,12 +1088,12 @@ function HomeScreen({ go, clients, signatures, forms8879, extensions, reminded, 
           const now = new Date();
           const seasonProgress = Math.max(0, Math.min(1, (now - seasonStart) / Math.max(taxDeadline - seasonStart, 1)));
           const targetStep = Math.max(1, Math.min(stepLabels.length, Math.floor(seasonProgress * stepLabels.length) + 1));
-          const currentAvgStep = clients.length
-            ? clients.reduce((sum, c) => sum + c.step, 0) / clients.length
+          const currentAvgStep = scopedClients.length
+            ? scopedClients.reduce((sum, c) => sum + c.step, 0) / scopedClients.length
             : 1;
           const onTrack = currentAvgStep >= (targetStep - 0.5);
           return (
-            <div style={{ marginTop:16 }}>
+            <div style={{ marginTop:20 }}>
               <div style={{ fontSize:14, fontWeight:700, color:"#666666", letterSpacing:0.4, marginBottom:8 }}>Return Pipeline</div>
               <div style={{ background:"#fff", border:"1px solid #e0e0e0", borderRadius:14, padding:"14px 12px 14px" }}>
                 <div style={{ marginBottom:14 }}>
@@ -1023,7 +1140,7 @@ function HomeScreen({ go, clients, signatures, forms8879, extensions, reminded, 
                   onClick={() => go(S.CLIENTS)}
                   style={{ width:"100%", marginTop:14, border:"1.5px solid #d8d8d8", background:"#fff", color:"#555555", fontSize:13, fontWeight:700, padding:"12px 0", borderRadius:12, cursor:"pointer" }}
                 >
-                  {`Review clients (${clients.filter(c => c.step >= 3 && c.step < 7).length})`}
+                  {`Review clients (${scopedClients.filter(c => c.step >= 3 && c.step < 7).length})`}
                 </button>
               </div>
             </div>
@@ -1032,11 +1149,11 @@ function HomeScreen({ go, clients, signatures, forms8879, extensions, reminded, 
 
         {/* SIGNATURES WIDGET */}
         {(() => {
-          const pendingSignatures = signatures.filter(s => !signed.includes(s.id));
-          const sigCompleted = signatures.filter(s => signed.includes(s.id)).length;
-          const formPending = forms8879.filter(f => f.status === "pending").length;
-          const formCompleted = forms8879.filter(f => f.status === "signed").length;
-          const formFailed = forms8879.filter(f => f.status === "failed").length;
+          const pendingSignatures = scopedSignatures.filter(s => !signed.includes(s.id));
+          const sigCompleted = scopedSignatures.filter(s => signed.includes(s.id)).length;
+          const formPending = scopedForms8879.filter(f => f.status === "pending").length;
+          const formCompleted = scopedForms8879.filter(f => f.status === "signed").length;
+          const formFailed = scopedForms8879.filter(f => f.status === "failed").length;
           const signingInProcess = pendingSignatures.length + formPending;
           const completed = sigCompleted + formCompleted;
           const cancelled = 0;
@@ -1158,10 +1275,10 @@ function HomeScreen({ go, clients, signatures, forms8879, extensions, reminded, 
 
         {/* ENGAGEMENT LETTER WIDGET */}
         {(() => {
-          const elSigned = clients.filter(c=>c.elStatus==="signed").length;
-          const elTotal = clients.length;
-          const myActions = clients.filter(c=>c.elStatus==="pending").length; // CPA needs to prepare/send
-          const clientActions = clients.filter(c=>c.elStatus==="sent").length; // client needs to sign
+          const elSigned = scopedClients.filter(c=>c.elStatus==="signed").length;
+          const elTotal = scopedClients.length;
+          const myActions = scopedClients.filter(c=>c.elStatus==="pending").length; // CPA needs to prepare/send
+          const clientActions = scopedClients.filter(c=>c.elStatus==="sent").length; // client needs to sign
           const pendingLetters = myActions + clientActions;
           const lettersToSend = 23;
           const allTotal = Math.max(elTotal, 1);
@@ -1230,7 +1347,7 @@ function HomeScreen({ go, clients, signatures, forms8879, extensions, reminded, 
                 <div style={{ display:"flex", gap:8, marginTop:2 }}>
                   <button
                     onClick={(e) => { e.stopPropagation(); go(S.EL_WIZARD); }}
-                    style={{ flex:1, border:"none", background:"#2d2d2d", color:"#fff", fontSize:13, fontWeight:700, padding:"13px 0", borderRadius:12, cursor:"pointer" }}
+                    style={{ flex:1, border:"none", background:"#0065FF", color:"#fff", fontSize:13, fontWeight:700, padding:"13px 0", borderRadius:12, cursor:"pointer" }}
                   >
                     {`Send letters (${lettersToSend})`}
                   </button>
@@ -1246,100 +1363,79 @@ function HomeScreen({ go, clients, signatures, forms8879, extensions, reminded, 
           );
         })()}
 
-        {/* METRICS WIDGETS */}
-        <div style={{ marginTop:12 }}>
-          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
-            <div style={{ fontSize:14, fontWeight:700, color:"#666666", letterSpacing:0.4 }}>Metrics</div>
-            <span onClick={() => go(S.METRICS)} style={{ fontSize:11, color:"#555555", fontWeight:600, cursor:"pointer" }}>See all →</span>
-          </div>
-
-          {/* Organizer Review widget */}
-          {(() => {
-            const MiniDonut = ({ segs, size=76, stroke=9, centerLabel, centerSub }) => {
-              const r=(size-stroke)/2, circ=2*Math.PI*r;
-              const total=segs.reduce((a,s)=>a+s.v,0)||1;
-              let off=0;
-              return (
-                <div style={{ position:"relative", width:size, height:size, flexShrink:0 }}>
-                  <svg width={size} height={size} style={{ transform:"rotate(-90deg)", position:"absolute" }}>
-                    <circle cx={size/2} cy={size/2} r={r} fill="none" stroke="#f0f0f0" strokeWidth={stroke} />
-                    {segs.map((s,i)=>{
-                      const dash=Math.max((s.v/total)*circ-1,0), gap=circ-dash;
-                      const el=<circle key={i} cx={size/2} cy={size/2} r={r} fill="none" stroke={s.c} strokeWidth={stroke} strokeDasharray={`${dash} ${gap+1}`} strokeDashoffset={-off} strokeLinecap="round"/>;
-                      off+=(s.v/total)*circ; return el;
-                    })}
-                  </svg>
-                  <div style={{ position:"absolute", inset:0, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center" }}>
-                    <span style={{ fontSize:13, fontWeight:700, color:"#1a1a1a", lineHeight:1 }}>{centerLabel}</span>
-                    {centerSub && <span style={{ fontSize:8, color:"#999999", marginTop:1 }}>{centerSub}</span>}
-                  </div>
-                </div>
-              );
-            };
-            const orgSent = clients.filter(c=>c.step>=4).length;
-            const orgNot  = clients.length - orgSent;
-            return (
-              <div style={{ marginBottom:10 }}>
-                <div style={{ width:"100%", background:"#fff", borderRadius:14, border:"1px solid #e4e4e4", padding:"12px 10px" }}>
-                  <div style={{ fontSize:13, fontWeight:700, color:"#555555", marginBottom:4 }}>Organizer Review</div>
-                  <div style={{ fontSize:11, color:"#888888", marginBottom:24 }}>Based on current intake, organizer returns are expected to peak soon—plan reviewer bandwidth accordingly.</div>
-                  <div style={{ display:"flex", alignItems:"center", gap:20, paddingLeft:32, paddingRight:32, marginTop:6 }}>
-                    <MiniDonut centerLabel={`${orgSent}`} centerSub="sent"
-                      segs={[{v:orgNot,c:"#7c6fcd"},{v:orgSent,c:"#4fc3f7"}]} />
-                    <div style={{ flex:1 }}>
-                      {[{l:"Not Sent",c:"#7c6fcd",v:orgNot},{l:"Sent to Review",c:"#4fc3f7",v:orgSent}].map(s=>(
-                        <div key={s.l} style={{ display:"flex", alignItems:"center", gap:5, marginBottom:3 }}>
-                          <div style={{ width:7, height:7, borderRadius:99, background:s.c, flexShrink:0 }} />
-                          <span style={{ fontSize:9, color:"#666666", flex:1 }}>{s.l}</span>
-                          <span style={{ fontSize:9, fontWeight:700, color:"#1a1a1a" }}>{Math.round((s.v/clients.length)*100)}%</span>
-                        </div>
+        {/* STAFFING WIDGET */}
+        {(() => {
+          const staffingRows = buildStaffingRows(scopedClients).slice(0, 12);
+          return (
+            <div style={{ marginTop:16 }}>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
+                <div style={{ fontSize:14, fontWeight:700, color:"#666666", letterSpacing:0.4 }}>Staffing</div>
+              </div>
+              <div style={{ marginLeft:-18, marginRight:-18, background:"#fff", borderTop:"1px solid #ececec", borderBottom:"1px solid #ececec" }}>
+                <div style={{ overflowX:"auto", WebkitOverflowScrolling:"touch", padding:"0 16px" }}>
+                  <div style={{ minWidth:700 }}>
+                    <div style={{ display:"grid", gridTemplateColumns:"1.25fr 1fr 1fr 0.95fr 1fr", gap:0, background:"#f8f8f8", borderBottom:"1px solid #ececec" }}>
+                      {["Client", "Workflow", "Partner", "Office", "Status"].map((h) => (
+                        <div key={h} style={{ padding:"9px 12px", fontSize:10, fontWeight:700, color:"#4b4b4b", letterSpacing:0.2 }}>{h}</div>
                       ))}
                     </div>
-                  </div>
-                  <button style={{ width:"100%", marginTop:12, border:"1.5px solid #e0e0e0", background:"#fff", color:"#555555", fontSize:12, fontWeight:700, padding:"10px 0", borderRadius:10, cursor:"pointer" }}>Check blockers</button>
-                </div>
-              </div>
-            );
-          })()}
-
-          {/* E-file by Type — horizontal stacked bars */}
-          <div style={{ background:"#fff", borderRadius:14, border:"1px solid #e4e4e4", padding:"12px 14px" }}>
-            <div style={{ fontSize:13, fontWeight:700, color:"#555555", marginBottom:4 }}>E-Filing by Type</div>
-            <div style={{ fontSize:11, color:"#888888", marginBottom:24 }}>Predictive mix shows 1040s driving volume; queue capacity may need a small lift mid‑week.</div>
-            <div style={{ display:"flex", gap:8, marginBottom:10 }}>
-              {[{t:"1040",c:"#7c6fcd"},{t:"1041",c:"#26a69a"},{t:"1120",c:"#ef5350"}].map(x=>(
-                <div key={x.t} style={{ display:"flex", alignItems:"center", gap:4 }}>
-                  <div style={{ width:7, height:7, borderRadius:99, background:x.c }} />
-                  <span style={{ fontSize:9, color:"#777777" }}>{x.t}</span>
-                </div>
-              ))}
-            </div>
-            {[
-              { status:"Accepted",  bars:[{v:55,c:"#7c6fcd"},{v:25,c:"#ef5350"},{v:10,c:"#26a69a"}] },
-              { status:"At IRS",    bars:[{v:3, c:"#7c6fcd"}] },
-              { status:"Initiated", bars:[{v:2, c:"#7c6fcd"},{v:1,c:"#ef5350"}] },
-              { status:"Rejected",  bars:[{v:1, c:"#ef5350"}] },
-              { status:"Qualified", bars:[{v:2, c:"#26a69a"}] },
-            ].map((row, i, arr) => {
-              const total = row.bars.reduce((a,b)=>a+b.v,0);
-              return (
-                <div key={row.status} style={{ marginBottom:i<arr.length-1?8:0 }}>
-                  <div style={{ display:"flex", justifyContent:"space-between", marginBottom:3 }}>
-                    <span style={{ fontSize:10, color:"#555555" }}>{row.status}</span>
-                    <span style={{ fontSize:10, fontWeight:600, color:"#1a1a1a" }}>{total}</span>
-                  </div>
-                  <div style={{ display:"flex", height:7, borderRadius:99, overflow:"hidden", background:"#f0f0f0" }}>
-                    {row.bars.map((b,j)=>(
-                      <div key={j} style={{ width:`${(b.v/90)*100}%`, background:b.c, minWidth:b.v>0?3:0 }} />
+                    {staffingRows.map((row, idx) => (
+                      <div
+                        key={row.id}
+                        style={{
+                          display:"grid",
+                          gridTemplateColumns:"1.25fr 1fr 1fr 0.95fr 1fr",
+                          gap:0,
+                          borderBottom: idx === staffingRows.length - 1 ? "none" : "1px solid #efefef",
+                          background: idx % 2 ? "#fcfcfc" : "#fff",
+                        }}
+                      >
+                        <div style={{ padding:"11px 12px", minWidth:0 }}>
+                          <div style={{ fontSize:11, color:"#2563eb", fontWeight:600, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{row.client}</div>
+                        </div>
+                        <div style={{ padding:"11px 12px", minWidth:0 }}>
+                          <div style={{ display:"flex", alignItems:"center", gap:5, minWidth:0 }}>
+                            <div style={{ width:3, height:14, borderRadius:99, background:row.workflowColor, flexShrink:0 }} />
+                            <span style={{ fontSize:10.5, color:"#3f3f3f", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{row.workflow}</span>
+                          </div>
+                        </div>
+                        <div style={{ padding:"11px 12px", minWidth:0 }}>
+                          <div style={{ fontSize:10.5, color:"#3f3f3f", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{row.partner}</div>
+                        </div>
+                        <div style={{ padding:"11px 12px", minWidth:0 }}>
+                          <div style={{ fontSize:10.5, color:"#3f3f3f", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{row.office}</div>
+                        </div>
+                        <div style={{ padding:"11px 12px", minWidth:0, display:"flex", alignItems:"center" }}>
+                          <span
+                            style={{
+                              fontSize:9.5,
+                              fontWeight:700,
+                              color:row.status === "Awaiting Client Info" ? "#a44b4b" : "#3f3f3f",
+                              background:row.status === "Awaiting Client Info" ? "#f8eded" : "#f1f1f1",
+                              borderRadius:999,
+                              padding:"4px 8px",
+                              whiteSpace:"nowrap",
+                              overflow:"hidden",
+                              textOverflow:"ellipsis",
+                            }}
+                          >
+                            {row.status}
+                          </span>
+                        </div>
+                      </div>
                     ))}
                   </div>
                 </div>
-              );
-            })}
-            <button style={{ width:"100%", marginTop:12, border:"1.5px solid #e0e0e0", background:"#fff", color:"#555555", fontSize:12, fontWeight:700, padding:"10px 0", borderRadius:10, cursor:"pointer" }}>Fix and resubmit</button>
-          </div>
-
-        </div>
+              </div>
+              <button
+                onClick={() => go(S.STAFFING)}
+                style={{ width:"100%", marginTop:10, border:"none", background:"transparent", color:"#555555", fontSize:12, fontWeight:700, padding:"6px 0", cursor:"pointer" }}
+              >
+                See all →
+              </button>
+            </div>
+          );
+        })()}
 
 
       {/* Work scope sheet */}
@@ -1363,31 +1459,97 @@ function HomeScreen({ go, clients, signatures, forms8879, extensions, reminded, 
               <div style={{ fontSize:14, fontWeight:700, color:"#1a1a1a" }}>Select work view</div>
               <button onClick={closeWorkScopeSheet} style={{ border:"none", background:"#f2f2f2", width:28, height:28, borderRadius:99, cursor:"pointer", color:"#555" }}>✕</button>
             </div>
-
             <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
               {[
-                { id:"my", label:"My work", desc:"Only tasks assigned to me" },
+                { id:"my", label:"My clients", desc:"Clients assigned to me", subItems: myClients },
                 { id:"all", label:"All work", desc:"Team-wide queue and workload" },
                 { id:"favorites", label:"Favorites", desc:"Pinned clients and priority items" },
               ].map((opt) => {
-                const active = workScope === opt.id;
+                const activeScope = workScope === opt.id && selectedClientId == null;
+                const hasSubItems = !!opt.subItems?.length;
                 return (
-                  <button
+                  <div
                     key={opt.id}
-                    onClick={() => { setWorkScope(opt.id); closeWorkScopeSheet(); }}
                     style={{
                       width:"100%",
-                      border: active ? "1.5px solid #2d2d2d" : "1.5px solid #e0e0e0",
-                      background: active ? "#f7f7f7" : "#fff",
+                      padding: hasSubItems ? "12px" : "10px 12px",
+                      border:"1px solid #dedede",
                       borderRadius:12,
-                      padding:"10px 12px",
-                      textAlign:"left",
-                      cursor:"pointer",
+                      background:"#f6f6f6",
                     }}
                   >
-                    <div style={{ fontSize:13, fontWeight:700, color:"#1a1a1a" }}>{opt.label}</div>
-                    <div style={{ fontSize:11, color:"#888888", marginTop:2 }}>{opt.desc}</div>
-                  </button>
+                    <button
+                      onClick={() => {
+                        setWorkScope(opt.id);
+                        setSelectedClientId(null);
+                        closeWorkScopeSheet();
+                      }}
+                      style={{
+                        width:"100%",
+                        textAlign:"left",
+                        border:"none",
+                        background:"transparent",
+                        borderRadius:0,
+                        padding:0,
+                        cursor:"pointer",
+                      }}
+                    >
+                      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:10 }}>
+                        <div>
+                          <div style={{ fontSize:12, fontWeight:700, color:activeScope ? "#1a1a1a" : "#2a2a2a", marginBottom:2 }}>{opt.label}</div>
+                          <div style={{ fontSize:10, color:"#7f7f7f" }}>{opt.desc}</div>
+                        </div>
+                        {radioControl(activeScope)}
+                      </div>
+                    </button>
+                    {opt.subItems?.length > 0 && (
+                      <div style={{ marginTop:7 }}>
+                        <div style={{ display:"flex", flexDirection:"column", gap:0 }}>
+                          {opt.subItems.map((client, subIdx) => (
+                            <button
+                              key={client.id}
+                              onClick={() => {
+                                setWorkScope("my");
+                                setSelectedClientId(client.id);
+                                closeWorkScopeSheet();
+                              }}
+                              style={{
+                                width:"100%",
+                                display:"flex",
+                                alignItems:"flex-start",
+                                justifyContent:"space-between",
+                                gap:10,
+                                textAlign:"left",
+                                border:"none",
+                                borderBottom: subIdx === opt.subItems.length - 1 ? "none" : "1px solid #e4e4e4",
+                                background:"transparent",
+                                padding:"10px 0",
+                                cursor:"pointer",
+                              }}
+                            >
+                              <div style={{ flex:1, minWidth:0 }}>
+                                <div style={{ fontSize:11, fontWeight:700, color:"#3f3f3f", lineHeight:1.25, marginBottom:3 }}>{client.name}</div>
+                                <div style={{ fontSize:9.5, color:"#8a8a8a", lineHeight:1.35 }}>
+                                  {client.stepLabel} · Step {client.step}/{client.steps}
+                                </div>
+                              </div>
+                              <div style={{ display:"flex", alignItems:"center", gap:8, flexShrink:0 }}>
+                                <div style={{ textAlign:"right" }}>
+                                  <div style={{ fontSize:9.5, fontWeight:700, color: client.blockers > 0 ? "#a44b4b" : "#5f7f5f", lineHeight:1.2 }}>
+                                    {client.blockers > 0 ? `${client.blockers} blocker${client.blockers === 1 ? "" : "s"}` : "No blockers"}
+                                  </div>
+                                  <div style={{ fontSize:9, color:"#8a8a8a", lineHeight:1.2, marginTop:2 }}>
+                                    {client.signPending} to sign
+                                  </div>
+                                </div>
+                                {radioControl(workScope === "my" && selectedClientId === client.id)}
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 );
               })}
             </div>
@@ -1474,7 +1636,7 @@ function HomeScreen({ go, clients, signatures, forms8879, extensions, reminded, 
                   border:"none",
                   borderRadius:12,
                   padding:"12px 0",
-                  background: remindReason === "Custom" && !remindCustom.trim() ? "#d8d8d8" : "#2d2d2d",
+                  background: remindReason === "Custom" && !remindCustom.trim() ? "#d8d8d8" : "#0065FF",
                   color: remindReason === "Custom" && !remindCustom.trim() ? "#888888" : "#fff",
                   fontWeight:700,
                   fontSize:13,
@@ -1566,7 +1728,7 @@ function HomeScreen({ go, clients, signatures, forms8879, extensions, reminded, 
                     border:"none",
                     borderRadius:12,
                     padding:"12px 0",
-                    background: refileSubmitting ? "#555555" : "#2d2d2d",
+                    background: refileSubmitting ? "#555555" : "#0065FF",
                     color:"#fff",
                     fontWeight:700,
                     fontSize:13,
@@ -1690,7 +1852,7 @@ function HomeScreen({ go, clients, signatures, forms8879, extensions, reminded, 
                     border:"none",
                     borderRadius:12,
                     padding:"12px 0",
-                    background: eSignSubmitting ? "#555555" : "#2d2d2d",
+                    background: eSignSubmitting ? "#555555" : "#0065FF",
                     color:"#fff",
                     fontWeight:700,
                     fontSize:13,
@@ -1730,7 +1892,7 @@ function HomeScreen({ go, clients, signatures, forms8879, extensions, reminded, 
         );
         return (
           <div style={{ position:"absolute", inset:0, zIndex:60, background:"#f4f4f4", display:"flex", flexDirection:"column" }}>
-            <div style={{ background:"#2d2d2d", padding:"12px 16px", display:"flex", alignItems:"center", justifyContent:"space-between", color:"#fff", flexShrink:0 }}>
+            <div style={{ background:UI.brand, padding:"12px 16px", display:"flex", alignItems:"center", justifyContent:"space-between", color:"#fff", flexShrink:0 }}>
               <div style={{ fontWeight:700, fontSize:14 }}>{docName}</div>
               <button onClick={() => setESignDocOpen(false)} style={{ border:"none", background:"rgba(255,255,255,0.15)", width:30, height:30, borderRadius:99, cursor:"pointer", color:"#fff", fontSize:16 }}>✕</button>
             </div>
@@ -1757,7 +1919,7 @@ function HomeScreen({ go, clients, signatures, forms8879, extensions, reminded, 
               <div style={{ fontSize:11, color:"#777777", marginBottom:8 }}>{signsLeft} signature{signsLeft>1?"s":""} left</div>
               <button
                 onClick={eSignSigned.first ? handleESignSecond : handleESignFirst}
-                style={{ width:"100%", border:"none", borderRadius:12, padding:"12px 0", background:"#2d2d2d", color:"#fff", fontWeight:700, fontSize:13, cursor:"pointer" }}
+                style={{ width:"100%", border:"none", borderRadius:12, padding:"12px 0", background:"#0065FF", color:"#fff", fontWeight:700, fontSize:13, cursor:"pointer" }}
               >
                 Sign
               </button>
@@ -1824,7 +1986,7 @@ function ClientsScreen({ go, clients, reminded, remind }) {
       {c.blockedBy === "client" && (
         <div style={{ marginTop:9, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
           <span style={{ fontSize:11, color:"#666666", fontWeight:600 }}>⚠ Waiting on client</span>
-          <button onClick={e => { e.stopPropagation(); remind(c.id); }} style={{ border:"none", borderRadius:8, padding:"4px 10px", fontSize:11, fontWeight:700, cursor:"pointer", background: reminded.includes(c.id)?"#e8e8e8":"#2d2d2d", color: reminded.includes(c.id)?"#4a4a4a":"#fff" }}>
+          <button onClick={e => { e.stopPropagation(); remind(c.id); }} style={{ border:"none", borderRadius:8, padding:"4px 10px", fontSize:11, fontWeight:700, cursor:"pointer", background: reminded.includes(c.id)?"#e8e8e8":UI.brand, color: reminded.includes(c.id)?"#4a4a4a":"#fff" }}>
             {reminded.includes(c.id) ? "✓ Sent" : "Send Reminder"}
           </button>
         </div>
@@ -1837,7 +1999,7 @@ function ClientsScreen({ go, clients, reminded, remind }) {
     return (
       <div style={{ marginBottom:14 }}>
         {/* Company card */}
-        <div style={{ background:"#2d2d2d", borderRadius:"14px 14px 0 0", padding:"12px 14px", display:"flex", alignItems:"center", gap:10 }}>
+        <div style={{ background:UI.brand, borderRadius:"14px 14px 0 0", padding:"12px 14px", display:"flex", alignItems:"center", gap:10 }}>
           <div style={{ width:32, height:32, borderRadius:9, background:"rgba(255,255,255,0.15)", color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", fontWeight:700, fontSize:13 }}>{company[0]}</div>
           <div style={{ flex:1 }}>
             <div style={{ fontWeight:700, fontSize:14, color:"#fff" }}>{company}</div>
@@ -1962,7 +2124,7 @@ function ClientDetailScreen({ go, ctx, reminded, remind, docs, chats }) {
               const chat = chats.find(ch => ch.name === c.name);
               if (chat) go(S.CHAT, { chat });
               else go(S.MESSAGING);
-            }} style={{ border:"none", borderRadius:10, padding:"10px 8px", fontWeight:600, fontSize:12, cursor:"pointer", background:"#2d2d2d", color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", gap:6 }}>
+            }} style={{ border:"none", borderRadius:10, padding:"10px 8px", fontWeight:600, fontSize:12, cursor:"pointer", background:"#0065FF", color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", gap:6 }}>
               <span>✉</span> Send Message
             </button>
             <button onClick={() => go(S.DOCUMENTS, {})} style={{ border:"none", borderRadius:10, padding:"10px 8px", fontWeight:600, fontSize:12, cursor:"pointer", background:"#f0f0f0", color:"#555555", display:"flex", alignItems:"center", justifyContent:"center", gap:6 }}>
@@ -1974,7 +2136,7 @@ function ClientDetailScreen({ go, ctx, reminded, remind, docs, chats }) {
               </button>
             )}
             {c.elStatus !== "signed" && (
-              <button onClick={() => go(S.EL_WIZARD, { preClient: c })} style={{ border:"none", borderRadius:10, padding:"10px 8px", fontWeight:600, fontSize:12, cursor:"pointer", background:"#2d2d2d", color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", gap:6 }}>
+              <button onClick={() => go(S.EL_WIZARD, { preClient: c })} style={{ border:"none", borderRadius:10, padding:"10px 8px", fontWeight:600, fontSize:12, cursor:"pointer", background:"#0065FF", color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", gap:6 }}>
                 <span>📝</span> Send EL
               </button>
             )}
@@ -2096,7 +2258,7 @@ function ELStatusScreen({ go, clients, reminded, remind, showToast }) {
           </div>
           <button
             onClick={() => go(S.EL_WIZARD, { preClient: null })}
-            style={{ border:"none", borderRadius:8, padding:"7px 12px", fontSize:11, fontWeight:700, background:"#2d2d2d", color:"#fff", cursor:"pointer", flexShrink:0 }}
+            style={{ border:"none", borderRadius:8, padding:"7px 12px", fontSize:11, fontWeight:700, background:"#0065FF", color:"#fff", cursor:"pointer", flexShrink:0 }}
           >+ Create New EL</button>
         </div>
       </div>
@@ -2138,7 +2300,7 @@ function ELStatusScreen({ go, clients, reminded, remind, showToast }) {
                     style={{
                       flex:1, border:"none", borderRadius:9, padding:"9px",
                       fontSize:12, fontWeight:700, cursor: isSent ? "default" : "pointer",
-                      background: isSent ? "#f0f0f0" : isReminding ? "#555" : "#2d2d2d",
+                      background: isSent ? "#f0f0f0" : isReminding ? "#555" : "#0065FF",
                       color: isSent ? "#4a4a4a" : "#fff",
                       transition:"background 0.3s",
                     }}
@@ -2227,7 +2389,7 @@ function ELWizardScreen({ go, ctx, clients, showToast }) {
         {step===0 ? "Cancel" : "← Back"}
       </button>
       <button onClick={onNext} disabled={disabled}
-        style={{ flex:2, border:"none", borderRadius:10, padding:"11px", fontSize:13, fontWeight:700, background: disabled?"#e0e0e0":"#2d2d2d", color: disabled?"#999999":"#fff", cursor: disabled?"default":"pointer", transition:"background 0.2s" }}>
+        style={{ flex:2, border:"none", borderRadius:10, padding:"11px", fontSize:13, fontWeight:700, background: disabled?"#e0e0e0":"#0065FF", color: disabled?"#999999":"#fff", cursor: disabled?"default":"pointer", transition:"background 0.2s" }}>
         {nextLabel}
       </button>
     </div>
@@ -2247,7 +2409,7 @@ function ELWizardScreen({ go, ctx, clients, showToast }) {
             <strong>{tpl?.name}</strong> has been sent for partner review.<br />
             {clientNames.join(", ")} will receive it once approved.
           </div>
-          <button onClick={() => go(S.EL_STATUS)} style={{ width:"100%", border:"none", borderRadius:12, padding:"13px", background:"#2d2d2d", color:"#fff", fontWeight:700, fontSize:14, cursor:"pointer" }}>
+          <button onClick={() => go(S.EL_STATUS)} style={{ width:"100%", border:"none", borderRadius:12, padding:"13px", background:"#0065FF", color:"#fff", fontWeight:700, fontSize:14, cursor:"pointer" }}>
             Back to Engagement Letters
           </button>
         </div>
@@ -2457,7 +2619,7 @@ function ELWizardScreen({ go, ctx, clients, showToast }) {
         <div style={{ display:"flex", gap:8, padding:"14px 18px", flexShrink:0 }}>
           <button onClick={() => setStep(s=>s-1)} style={{ flex:1, border:"1px solid #d8d8d8", borderRadius:10, padding:"11px", fontSize:13, fontWeight:600, background:"#fff", color:"#555555", cursor:"pointer" }}>← Back</button>
           <button onClick={() => go(S.EL_STATUS)} style={{ flex:1, border:"1px solid #d8d8d8", borderRadius:10, padding:"11px", fontSize:13, fontWeight:600, background:"#fff", color:"#555555", cursor:"pointer" }}>Draft</button>
-          <button onClick={handleSend} disabled={sending} style={{ flex:2, border:"none", borderRadius:10, padding:"11px", fontSize:13, fontWeight:700, background: sending?"#555":"#2d2d2d", color:"#fff", cursor: sending?"default":"pointer" }}>
+          <button onClick={handleSend} disabled={sending} style={{ flex:2, border:"none", borderRadius:10, padding:"11px", fontSize:13, fontWeight:700, background: sending?"#555":"#0065FF", color:"#fff", cursor: sending?"default":"pointer" }}>
             {sending ? "Sending..." : "Send to Review →"}
           </button>
         </div>
@@ -2728,7 +2890,7 @@ function SignDocScreen({ go, ctx, sign, signed }) {
           </div>
         </div>
         {!isSigned
-          ? <button onClick={handleSign} style={{ width:"100%", border:"none", borderRadius:12, padding:14, background:"#2d2d2d", color:"#fff", fontWeight:700, fontSize:14, cursor:"pointer" }}>Sign Document</button>
+          ? <button onClick={handleSign} style={{ width:"100%", border:"none", borderRadius:12, padding:14, background:"#0065FF", color:"#fff", fontWeight:700, fontSize:14, cursor:"pointer" }}>Sign Document</button>
           : <button style={{ width:"100%", border:"none", borderRadius:12, padding:14, background:"#f0f0f0", color:"#4a4a4a", fontWeight:700, fontSize:14, cursor:"default" }}>✓ Signed</button>
         }
       </div>
@@ -2768,7 +2930,7 @@ function Form8879Screen({ go, forms8879, reminded, remind, sign, signed }) {
                 </button>
               )}
               {(f.status === "pending" || f.status === "signed") && !signed.includes(f.id) && (
-                <button onClick={() => go(S.SIGN_DOC, { sig:{ id:f.id+"_cpa", client:f.client, doc:`8879 — ${f.jurisdiction}`, type:"8879", days:0 }})} style={{ flex:1, border:"none", borderRadius:9, padding:"8px", fontSize:12, fontWeight:600, cursor:"pointer", background:"#2d2d2d", color:"#fff" }}>
+                <button onClick={() => go(S.SIGN_DOC, { sig:{ id:f.id+"_cpa", client:f.client, doc:`8879 — ${f.jurisdiction}`, type:"8879", days:0 }})} style={{ flex:1, border:"none", borderRadius:9, padding:"8px", fontSize:12, fontWeight:600, cursor:"pointer", background:"#0065FF", color:"#fff" }}>
                   My Signature
                 </button>
               )}
@@ -2888,17 +3050,18 @@ function ChatTopicsScreen({ go, ctx, chatMsgs, openTopic }) {
   return (
     <div style={{ flex:1, display:"flex", flexDirection:"column" }}>
       {/* Header — same dark style as chat */}
-      <div style={{ background:"#2d2d2d", padding:"12px 16px 0", flexShrink:0 }}>
+      <div style={{ background:UI.brand, padding:"12px 16px 0", flexShrink:0 }}>
         <div style={{ display:"flex", alignItems:"center", gap:10, paddingBottom:12 }}>
           <button onClick={() => go(S.MESSAGING)} style={{ border:"none", background:"none", cursor:"pointer", color:"#b0b0b0", fontSize:20, padding:0 }}>←</button>
           <div style={{ position:"relative" }}>
             <div style={{ width:40, height:40, borderRadius: chat.type==="Internal"?10:99, background:"rgba(255,255,255,0.18)", color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", fontWeight:700, fontSize:15 }}>{chat.name[0]}</div>
-            {chat.online && <div style={{ position:"absolute", bottom:1, right:1, width:9, height:9, borderRadius:99, background:"#8a8a8a", border:"2px solid #2d2d2d" }} />}
+            {chat.online && <div style={{ position:"absolute", bottom:1, right:1, width:9, height:9, borderRadius:99, background:"#8a8a8a", border:`2px solid ${UI.brand}` }} />}
           </div>
           <div style={{ flex:1 }}>
             <div style={{ color:"#fff", fontWeight:700, fontSize:15 }}>{chat.name}</div>
             <div style={{ color:"#b0b0b0", fontSize:10 }}>{topics.length} topics · {chat.type}</div>
           </div>
+          <HeaderIcons />
         </div>
 
         <div style={{ height:1, background:"rgba(255,255,255,0.08)", marginTop:2 }} />
@@ -3029,16 +3192,17 @@ function ChatScreen({ go, ctx, chatMsgs, sendMsg }) {
   return (
     <div style={{ flex:1, display:"flex", flexDirection:"column" }}>
       {/* Header */}
-      <div style={{ background:"#2d2d2d", padding:"12px 16px", display:"flex", alignItems:"center", gap:10, flexShrink:0 }}>
+      <div style={{ background:UI.brand, padding:"12px 16px", display:"flex", alignItems:"center", gap:10, flexShrink:0 }}>
         <button onClick={() => go(backScreen, { chat })} style={{ border:"none", background:"none", cursor:"pointer", color:"#b0b0b0", fontSize:20, padding:0 }}>←</button>
         <div style={{ position:"relative" }}>
           <div style={{ width:36, height:36, borderRadius: chat.type==="Internal"?10:99, background:"rgba(255,255,255,0.2)", color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", fontWeight:700, fontSize:14 }}>{chat.name[0]}</div>
-          {chat.online && <div style={{ position:"absolute", bottom:1, right:1, width:9, height:9, borderRadius:99, background:"#8a8a8a", border:"2px solid #2d2d2d" }} />}
+          {chat.online && <div style={{ position:"absolute", bottom:1, right:1, width:9, height:9, borderRadius:99, background:"#8a8a8a", border:`2px solid ${UI.brand}` }} />}
         </div>
         <div style={{ flex:1 }}>
           <div style={{ color:"#fff", fontWeight:700, fontSize:14 }}>{chat.name}</div>
           <div style={{ color:"#b0b0b0", fontSize:10 }}>{topic ? `${topic.icon} ${topic.label}` : (chat.online?"online":"last seen recently")}</div>
         </div>
+        <HeaderIcons />
       </div>
 
       {/* Messages */}
@@ -3118,7 +3282,7 @@ function ChatScreen({ go, ctx, chatMsgs, sendMsg }) {
           <input value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => e.key==="Enter" && handle()} placeholder="Message..." style={{ flex:1, border:"none", background:"none", outline:"none", fontSize:13, color:"#1a1a1a" }} />
           <span style={{ color:"#999999", fontSize:14, cursor:"pointer" }}>📎</span>
         </div>
-        <button onClick={handle} style={{ width:38, height:38, borderRadius:99, background: input.trim()?"#2d2d2d":"#d8d8d8", border:"none", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+        <button onClick={handle} style={{ width:38, height:38, borderRadius:99, background: input.trim()?"#0065FF":"#d8d8d8", border:"none", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
           <span style={{ color: input.trim()?"#fff":"#999999", transform:"rotate(45deg)", display:"inline-block", fontSize:14 }}>➤</span>
         </button>
       </div>
@@ -3131,42 +3295,102 @@ function ChatScreen({ go, ctx, chatMsgs, sendMsg }) {
 // ══════════════════════════════════════════════════════════════════
 function DMSScreen({ go, docs }) {
   const [q, setQ] = useState("");
-  const [f, setF] = useState("All");
-  const extColor = e => ({ pdf:"#555555", docx:"#555555", xlsx:"#4a4a4a" }[e]||"#777777");
-  const extIcon  = e => ({ pdf:"📄", docx:"📝", xlsx:"📊" }[e]||"📄");
-  const filtered = docs.filter(d => {
-    const ms = d.name.toLowerCase().includes(q.toLowerCase()) || d.client.toLowerCase().includes(q.toLowerCase());
-    const mf = f==="All" ? true : d.type===f;
-    return ms && mf;
+  const [tab, setTab] = useState("All files");
+  const tabs = ["All files", "Favorites", "Recent Files", "Recycle Bin"];
+
+  const docIcon = (d) => {
+    if (d.type === "PBC") return { bg:"#e8f0ff", fg:"#3b82f6", label:"📁" };
+    if (d.ext === "pdf") return { bg:"#ffeceb", fg:"#ef4444", label:"PDF" };
+    if (d.ext === "docx") return { bg:"#eaf1ff", fg:"#2563eb", label:"DOC" };
+    if (d.ext === "xlsx") return { bg:"#e9f9f0", fg:"#16a34a", label:"XLS" };
+    return { bg:"#f2f2f2", fg:"#555555", label:"FILE" };
+  };
+  const dateLabel = (d) => {
+    if (d.date === "Dec 18") return "12/18/2025";
+    if (d.date === "Dec 17") return "12/17/2025";
+    if (d.date === "Dec 16") return "12/16/2025";
+    if (d.date === "Dec 15") return "12/15/2025";
+    if (d.date === "Dec 13") return "12/13/2025";
+    return "12/12/2025";
+  };
+
+  const searched = docs.filter((d) =>
+    d.name.toLowerCase().includes(q.toLowerCase()) ||
+    d.client.toLowerCase().includes(q.toLowerCase())
+  );
+  const filtered = searched.filter((d, idx) => {
+    if (tab === "All files") return true;
+    if (tab === "Favorites") return d.status === "signed" || d.type === "EL";
+    if (tab === "Recent Files") return idx < 4;
+    if (tab === "Recycle Bin") return false;
+    return true;
   });
+
   return (
-    <div style={{ flex:1 }}>
-      <Header title="Documents" sub={`${docs.length} files`} search={q} onSearch={setQ} searchPh="Search documents..."
-        right={<button style={{ border:"none", background:"rgba(255,255,255,0.15)", color:"#fff", borderRadius:8, padding:"5px 11px", fontSize:11, fontWeight:600, cursor:"pointer" }}>+ Upload</button>}
-      />
-      {/* Type filters */}
-      <div style={{ display:"flex", gap:6, padding:"8px 18px 4px", overflowX:"auto", scrollbarWidth:"none" }}>
-        {["All","EL","8879","Return","PBC","Doc"].map(x => (
-          <button key={x} onClick={() => setF(x)} style={{ border:"none", borderRadius:99, padding:"4px 11px", fontSize:11, fontWeight:600, cursor:"pointer", whiteSpace:"nowrap", background: f===x?"#2d2d2d":"#f2f2f2", color: f===x?"#fff":"#777777", flexShrink:0 }}>{x}</button>
-        ))}
+    <div style={{ flex:1, background:UI.surface, display:"flex", flexDirection:"column" }}>
+      <Header title="Documents" sub={`${docs.length} files`} search={q} onSearch={setQ} searchPh="Search files..." />
+
+      <div style={{ padding:"0 16px", background:UI.surface }}>
+        <div style={{ display:"flex", gap:18, overflowX:"auto", scrollbarWidth:"none", borderBottom:"1px solid #d9dce3" }}>
+          {tabs.map((t) => (
+            <button
+              key={t}
+              onClick={() => setTab(t)}
+              style={{
+                border:"none",
+                background:"transparent",
+                color:tab === t ? "#111827" : "#6b7280",
+                fontSize:13,
+                fontWeight:tab === t ? 700 : 500,
+                padding:"9px 0 11px",
+                position:"relative",
+                cursor:"pointer",
+                whiteSpace:"nowrap",
+              }}
+            >
+              {t}
+              {tab === t && <span style={{ position:"absolute", left:0, right:0, bottom:-1, height:3, borderRadius:99, background:"#1e66f5" }} />}
+            </button>
+          ))}
+        </div>
       </div>
-      {/* Doc list */}
-      <div style={{ padding:"4px 18px 20px" }}>
-        {filtered.map((d,i) => (
-          <div key={d.id} onClick={() => go(S.DMS_FILE, { file:d })} style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 0", borderBottom: i<filtered.length-1?"1px solid #f2f2f2":"none", cursor:"pointer" }}>
-            <div style={{ width:40, height:40, borderRadius:10, background:extColor(d.ext)+"15", display:"flex", alignItems:"center", justifyContent:"center", fontSize:18, flexShrink:0 }}>{extIcon(d.ext)}</div>
-            <div style={{ flex:1, minWidth:0 }}>
-              <div style={{ fontSize:12, fontWeight:600, color:"#1a1a1a", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{d.name}</div>
-              <div style={{ display:"flex", alignItems:"center", gap:5, marginTop:2, flexWrap:"wrap" }}>
-                <span style={{ fontSize:11, color:"#999999" }}>{d.client}</span>
-                <span style={{ color:"#c0c0c0" }}>·</span>
-                <span style={{ fontSize:11, color:"#999999" }}>{d.size}</span>
-                {d.status && <StatusPill status={d.status} />}
-              </div>
-            </div>
-            <span style={{ color:"#999999", flexShrink:0 }}>›</span>
+
+      <div style={{ borderTop:"1px solid #e1e3e8" }}>
+        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"10px 16px", borderBottom:"1px solid #e1e3e8" }}>
+          <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+            <span style={{ fontSize:22, color:"#111827" }}>↓</span>
+            <span style={{ fontSize:17, fontWeight:700, color:"#111827" }}>Name</span>
           </div>
-        ))}
+          <button style={{ border:"none", background:"transparent", fontSize:17, fontWeight:600, color:"#111827", cursor:"pointer", padding:0 }}>Select</button>
+        </div>
+
+        {filtered.map((d, i) => {
+          const icon = docIcon(d);
+          return (
+            <div
+              key={d.id}
+              onClick={() => go(S.DMS_FILE, { file:d })}
+              style={{ display:"flex", alignItems:"center", gap:12, padding:"12px 16px", borderBottom:i < filtered.length - 1 ? "1px solid #e6e8ed" : "none", cursor:"pointer", background:"#f8f8fa" }}
+            >
+              <div style={{ width:42, height:42, borderRadius:9, background:icon.bg, color:icon.fg, display:"flex", alignItems:"center", justifyContent:"center", fontSize:11, fontWeight:800, flexShrink:0 }}>
+                {icon.label}
+              </div>
+              <div style={{ flex:1, minWidth:0 }}>
+                <div style={{ fontSize:15, fontWeight:500, color:"#111827", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+                  {d.name.replace(" — ", " ").replace(".pdf", "").replace(".docx", "").replace(".xlsx", "")}
+                </div>
+                <div style={{ fontSize:12, color:"#707784", marginTop:2 }}>{dateLabel(d)}</div>
+              </div>
+              <span style={{ color:"#121826", fontSize:22, lineHeight:1 }}>⋯</span>
+            </div>
+          );
+        })}
+
+        {filtered.length === 0 && (
+          <div style={{ padding:"18px 16px", fontSize:13, color:"#808590" }}>
+            {tab === "Recycle Bin" ? "Recycle Bin is empty." : "No files found."}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -3198,13 +3422,111 @@ function DMSFileScreen({ go, ctx }) {
           {[100,90,100,70,100,85].map((w,i) => <div key={i} style={{ height:9, background:"#f2f2f2", borderRadius:4, marginBottom:7, width:`${w}%` }} />)}
         </div>
         <div style={{ display:"flex", flexDirection:"column", gap:9 }}>
-          <button style={{ width:"100%", border:"none", borderRadius:11, padding:12, background:"#2d2d2d", color:"#fff", fontWeight:700, fontSize:13, cursor:"pointer" }}>⬇ Download</button>
+          <button style={{ width:"100%", border:"none", borderRadius:11, padding:12, background:"#0065FF", color:"#fff", fontWeight:700, fontSize:13, cursor:"pointer" }}>⬇ Download</button>
           <button style={{ width:"100%", border:"1.5px solid #d8d8d8", borderRadius:11, padding:12, background:"#fff", color:"#555555", fontWeight:600, fontSize:13, cursor:"pointer" }}>↗ Forward to Client / Bank</button>
         </div>
       </div>
     </div>
   );
 }
+
+// ══════════════════════════════════════════════════════════════════
+// STAFFING SCREEN
+// ══════════════════════════════════════════════════════════════════
+function StaffingScreen({ go, clients }) {
+  const [q, setQ] = useState("");
+  const [statusFilter, setStatusFilter] = useState("All");
+  const rows = buildStaffingRows(clients).filter((r) => {
+    const query = q.trim().toLowerCase();
+    const matchesQuery = !query || [r.client, r.workflow, r.partner, r.office, r.region, r.status]
+      .join(" ")
+      .toLowerCase()
+      .includes(query);
+    const matchesStatus = statusFilter === "All" || r.status === statusFilter;
+    return matchesQuery && matchesStatus;
+  });
+
+  const statusChipColor = (s) => {
+    if (s === "Awaiting Client Info") return "#a44b4b";
+    if (s === "QC Review") return "#3b6f4a";
+    return "#555555";
+  };
+
+  return (
+    <div style={{ flex:1 }}>
+      <Header
+        title="Staffing"
+        sub={`${rows.length} records`}
+        back
+        onBack={() => go(S.HOME)}
+        search={q}
+        onSearch={setQ}
+        searchPh="Search client, workflow, partner..."
+      />
+
+      <div style={{ display:"flex", gap:6, padding:"8px 18px 10px", overflowX:"auto", scrollbarWidth:"none" }}>
+        {["All", "Preparation", "QC Review", "Awaiting Client Info"].map((f) => (
+          <button
+            key={f}
+            onClick={() => setStatusFilter(f)}
+            style={{
+              border:"none",
+              borderRadius:99,
+              padding:"5px 11px",
+              fontSize:11,
+              fontWeight:600,
+              cursor:"pointer",
+              whiteSpace:"nowrap",
+              background: statusFilter === f ? "#2d2d2d" : "#f2f2f2",
+              color: statusFilter === f ? "#fff" : "#777777",
+              flexShrink:0,
+            }}
+          >
+            {f}
+          </button>
+        ))}
+      </div>
+
+      <div style={{ padding:"0 18px 20px" }}>
+        <div style={{ background:"#fff", border:"1px solid #e0e0e0", borderRadius:12, overflow:"hidden" }}>
+          <div style={{ overflowX:"auto", WebkitOverflowScrolling:"touch" }}>
+            <div style={{ minWidth:860 }}>
+              <div style={{ display:"grid", gridTemplateColumns:"1.6fr 1.2fr 1fr 1fr 1fr 0.8fr", background:"#f8f8f8", borderBottom:"1px solid #ececec" }}>
+                {["Client", "Workflow", "Partner", "Office", "Region", "Tax Year"].map((h) => (
+                  <div key={h} style={{ padding:"10px 10px", fontSize:10.5, fontWeight:700, color:"#4b4b4b" }}>{h}</div>
+                ))}
+              </div>
+
+              {rows.map((row, i) => (
+                <div key={row.id} style={{ display:"grid", gridTemplateColumns:"1.6fr 1.2fr 1fr 1fr 1fr 0.8fr", borderBottom:i === rows.length - 1 ? "none" : "1px solid #efefef" }}>
+                  <div style={{ padding:"10px", minWidth:0 }}>
+                    <div style={{ fontSize:12, color:"#2563eb", fontWeight:500, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{row.client}</div>
+                    <div style={{ fontSize:10, color:"#999999", marginTop:1 }}>{row.status}</div>
+                  </div>
+                  <div style={{ padding:"10px", minWidth:0 }}>
+                    <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                      <div style={{ width:4, height:15, borderRadius:99, background:row.workflowColor, flexShrink:0 }} />
+                      <span style={{ fontSize:11, color:"#3f3f3f", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{row.workflow}</span>
+                    </div>
+                  </div>
+                  <div style={{ padding:"10px", fontSize:11, color:"#3f3f3f", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{row.partner}</div>
+                  <div style={{ padding:"10px", fontSize:11, color:"#3f3f3f", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{row.office}</div>
+                  <div style={{ padding:"10px", fontSize:11, color:"#3f3f3f", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{row.region}</div>
+                  <div style={{ padding:"10px", fontSize:11, color:"#3f3f3f" }}>{row.taxYear}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div style={{ marginTop:10, fontSize:11, color:"#777777" }}>
+          Showing {rows.length} staffing records
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ══════════════════════════════════════════════════════════════════
 // METRICS SCREEN
 // ══════════════════════════════════════════════════════════════════
@@ -3295,9 +3617,14 @@ function MetricsScreen({ go, clients }) {
 
   return (
     <div style={{ flex:1, background:"#f0f0f0" }}>
-      <div style={{ background:"#2d2d2d", padding:"12px 18px 14px" }}>
-        <div style={{ color:"#fff", fontSize:22, fontWeight:700, marginBottom:2 }}>Metrics</div>
-        <div style={{ color:"#b0b0b0", fontSize:11 }}>Tax season 2024</div>
+      <div style={{ background:UI.brand, padding:"12px 18px 14px" }}>
+        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:10 }}>
+          <div>
+            <div style={{ color:"#fff", fontSize:20, fontWeight:700, marginBottom:2 }}>Metrics</div>
+            <div style={{ color:"#b0b0b0", fontSize:11 }}>Tax season 2024</div>
+          </div>
+          <HeaderIcons />
+        </div>
       </div>
 
       <div style={{ padding:"12px 14px 24px", display:"flex", flexDirection:"column", gap:12 }}>
