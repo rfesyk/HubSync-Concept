@@ -457,6 +457,8 @@ export default function App() {
 // HOME SCREEN
 // ══════════════════════════════════════════════════════════════════
 function HomeScreen({ go, clients, signatures, forms8879, extensions, reminded, remind, undoRemind, showToast, hideToast, setOverlayOpen, signed }) {
+  const [workScope, setWorkScope] = useState("my"); // "my" | "all" | "favorites"
+  const [workScopeSheetOpen, setWorkScopeSheetOpen] = useState(false);
   const [cardExiting, setCardExiting] = useState(false);
   const [exitDir, setExitDir]       = useState(null); // "skip" | "action"
   const [remindSheet, setRemindSheet] = useState(null);
@@ -699,6 +701,16 @@ function HomeScreen({ go, clients, signatures, forms8879, extensions, reminded, 
     }, true);
   };
 
+  const openWorkScopeSheet = () => {
+    setWorkScopeSheetOpen(true);
+    setOverlayOpen(true);
+  };
+
+  const closeWorkScopeSheet = () => {
+    setWorkScopeSheetOpen(false);
+    setOverlayOpen(false);
+  };
+
   const allCards = buildFocusCards();
   const cardMap = Object.fromEntries(allCards.map(c => [c.key, c]));
   useEffect(() => {
@@ -743,7 +755,24 @@ function HomeScreen({ go, clients, signatures, forms8879, extensions, reminded, 
       {/* Dark header — title + metrics */}
       <div style={{ background:"#2d2d2d", padding:"10px 18px 18px" }}>
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-          <div style={{ color:"#fff", fontSize:20, fontWeight:700 }}>Home</div>
+          <button
+            onClick={openWorkScopeSheet}
+            style={{
+              border:"none",
+              background:"transparent",
+              color:"#fff",
+              fontSize:20,
+              fontWeight:700,
+              display:"inline-flex",
+              alignItems:"center",
+              gap:7,
+              padding:0,
+              cursor:"pointer",
+            }}
+          >
+            {workScope === "my" ? "My work" : workScope === "all" ? "All work" : "Favorites"}
+            <span style={{ fontSize:13, color:"#cfcfcf", lineHeight:1 }}>▾</span>
+          </button>
           <button onClick={() => go(S.SETTINGS)} style={{ border:"none", background:"transparent", width:32, height:32, borderRadius:99, cursor:"pointer", color:"#d0d0d0", fontSize:22, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>⚙</button>
         </div>
 
@@ -931,23 +960,58 @@ function HomeScreen({ go, clients, signatures, forms8879, extensions, reminded, 
 
       <div style={{ padding:"8px 18px 20px" }}>
 
-                {(() => {
+        {(() => {
           const stageCounts = stepLabels.map((label, i) =>
             clients.filter(c => c.step === i + 1).length
           );
           const maxCount = Math.max(...stageCounts, 1);
           const shortLabels = ["Sign EL","Req List","Upload","Organizer","Review","Sign Ret.","Payments"];
+          const seasonStart = new Date(new Date().getFullYear(), 0, 1);
+          const taxDeadline = new Date(new Date().getFullYear(), 3, 15);
+          const now = new Date();
+          const seasonProgress = Math.max(0, Math.min(1, (now - seasonStart) / Math.max(taxDeadline - seasonStart, 1)));
+          const targetStep = Math.max(1, Math.min(stepLabels.length, Math.floor(seasonProgress * stepLabels.length) + 1));
+          const currentAvgStep = clients.length
+            ? clients.reduce((sum, c) => sum + c.step, 0) / clients.length
+            : 1;
+          const onTrack = currentAvgStep >= (targetStep - 0.5);
           return (
             <div style={{ marginTop:16 }}>
               <div style={{ fontSize:14, fontWeight:700, color:"#666666", letterSpacing:0.4, marginBottom:8 }}>Return Pipeline</div>
-              <div style={{ background:"#fff", border:"1px solid #e0e0e0", borderRadius:14, padding:"12px 10px 10px" }}>
-                <div style={{ display:"flex", gap:0, alignItems:"flex-end", height:110 }}>
+              <div style={{ background:"#fff", border:"1px solid #e0e0e0", borderRadius:14, padding:"14px 12px 14px" }}>
+                <div style={{ marginBottom:14 }}>
+                  <div style={{ fontSize:15, fontWeight:800, color: onTrack ? "#2f6f3e" : "#8f3b3b", marginBottom:5 }}>
+                    {onTrack ? "You're on track" : "You're slightly behind"}
+                  </div>
+                  <div style={{ fontSize:10.5, color:"#7f7f7f" }}>
+                    Target step now: <strong style={{ color:"#555555", fontWeight:700 }}>{shortLabels[targetStep - 1]}</strong> · Clients currently average at step {currentAvgStep.toFixed(1)}
+                  </div>
+                </div>
+                <div style={{ display:"flex", gap:0, alignItems:"flex-end", height:114 }}>
                   {stageCounts.map((count, i) => {
-                    const blocked = clients.filter(c => c.step === i+1 && c.blockedBy === "client").length;
                     const h = count === 0 ? 36 : Math.max(36, Math.round((count / maxCount) * 100));
+                    const isTarget = i + 1 === targetStep;
                     return (
                       <div key={i} style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", gap:3, padding:"0 3px" }}>
-                        <div style={{ width:"100%", borderRadius:9, background: count>0?"#e8e8e8":"#f4f4f4", display:"flex", alignItems:"center", justifyContent:"center", height:h, position:"relative", transition:"height 0.3s" }}>
+                        <div
+                          style={{
+                            width:"100%",
+                            borderRadius:9,
+                            background: isTarget ? "#e8f0ff" : (count>0?"#e8e8e8":"#f4f4f4"),
+                            border: isTarget ? "1.5px solid #b9d1ff" : "1.5px solid transparent",
+                            display:"flex",
+                            alignItems:"center",
+                            justifyContent:"center",
+                            height:h,
+                            position:"relative",
+                            transition:"height 0.3s",
+                          }}
+                        >
+                          {isTarget && (
+                            <span style={{ position:"absolute", top:-24, left:"50%", transform:"translateX(-50%)", fontSize:8, fontWeight:700, color:"#3b68b0", letterSpacing:0.3 }}>
+                              Target
+                            </span>
+                          )}
                           <span style={{ fontSize: count>9?12:14, fontWeight:700, color: count>0?"#1a1a1a":"#d0d0d0" }}>{count}</span>
                         </div>
                         <span style={{ fontSize:8.5, color:"#777777", textAlign:"center", lineHeight:1.2, fontWeight:500, whiteSpace:"nowrap" }}>{shortLabels[i]}</span>
@@ -955,21 +1019,11 @@ function HomeScreen({ go, clients, signatures, forms8879, extensions, reminded, 
                     );
                   })}
                 </div>
-                {/* Flow bar */}
-                <div style={{ display:"flex", gap:1, marginTop:8, height:3, borderRadius:99, overflow:"hidden" }}>
-                  {stageCounts.map((v,i) => (
-                    <div key={i} style={{ flex:1, background: v>0?"#d0d0d0":"#f0f0f0", borderRadius:99 }} />
-                  ))}
-                </div>
-                <div style={{ display:"flex", justifyContent:"space-between", marginTop:4 }}>
-                  <span style={{ fontSize:9, color:"#b0b0b0" }}>Start</span>
-                  <span />
-                  <span style={{ fontSize:9, color:"#b0b0b0" }}>Filed</span>
-                </div>
                 <button
-                  style={{ width:"100%", marginTop:10, border:"1.5px solid #e0e0e0", background:"#fff", color:"#555555", fontSize:13, fontWeight:700, padding:"12px 0", borderRadius:12, cursor:"default" }}
+                  onClick={() => go(S.CLIENTS)}
+                  style={{ width:"100%", marginTop:14, border:"1.5px solid #d8d8d8", background:"#fff", color:"#555555", fontSize:13, fontWeight:700, padding:"12px 0", borderRadius:12, cursor:"pointer" }}
                 >
-                  See details
+                  {`Review clients (${clients.filter(c => c.step >= 3 && c.step < 7).length})`}
                 </button>
               </div>
             </div>
@@ -978,41 +1032,123 @@ function HomeScreen({ go, clients, signatures, forms8879, extensions, reminded, 
 
         {/* SIGNATURES WIDGET */}
         {(() => {
-          const sigPending = signatures.filter(s => !signed.includes(s.id)).length;
+          const pendingSignatures = signatures.filter(s => !signed.includes(s.id));
           const sigCompleted = signatures.filter(s => signed.includes(s.id)).length;
           const formPending = forms8879.filter(f => f.status === "pending").length;
           const formCompleted = forms8879.filter(f => f.status === "signed").length;
           const formFailed = forms8879.filter(f => f.status === "failed").length;
-          const signingInProcess = sigPending + formPending;
+          const signingInProcess = pendingSignatures.length + formPending;
           const completed = sigCompleted + formCompleted;
-          const stats = [
-            { label:"Signing in Process", value: signingInProcess, color:"#f2c94c" },
-            { label:"Completed", value: completed, color:"#4caf50" },
-            { label:"Cancelled", value: 0, color:"#f59e0b" },
-            { label:"Expired", value: 0, color:"#ef4444" },
-            { label:"Declined", value: 0, color:"#fca5a5" },
-            { label:"Authentication Failed", value: formFailed, color:"#ef5350" },
+          const cancelled = 0;
+          const expired = 0;
+          const declined = 0;
+          const authFailed = formFailed;
+          const allTotal = Math.max(signingInProcess + completed + cancelled + expired + declined + authFailed, 1);
+          const totalToSign = signingInProcess + authFailed;
+          const resolveCount = pendingSignatures.length;
+          const metricDefs = [
+            { key:"signing", label:"Signing in Process", value: signingInProcess, color:"#ec4899" },
+            { key:"completed", label:"Completed", value: completed, color:"#9333ea" },
+            { key:"cancelled", label:"Cancelled", value: cancelled, color:"#f4a257" },
+            { key:"expired", label:"Expired", value: expired, color:"#b71c1c" },
+            { key:"declined", label:"Declined", value: declined, color:"#f4a7b9" },
+            { key:"auth", label:"Signer Authentication Failed", value: authFailed, color:"#10b981" },
           ];
-          const total = Math.max(stats.reduce((a,s)=>a+s.value,0), 1);
+          const pct = (v) => Math.max(0, Math.min(100, (v / allTotal) * 100));
+          const primaryDefs = [
+            metricDefs.find(m => m.key === "signing"),
+            metricDefs.find(m => m.key === "completed"),
+            metricDefs.find(m => m.key === "auth"),
+          ].filter(Boolean);
           return (
             <div style={{ marginTop:22 }}>
-              <div onClick={() => go(S.MY_SIGNATURES)} style={{ fontSize:14, fontWeight:700, color:"#666666", letterSpacing:0.4, marginBottom:8, cursor:"pointer" }}>My Signatures</div>
-              <div style={{ marginTop:6, background:"#fff", border:"1px solid #e4e4e4", borderRadius:14, padding:"24px 12px 14px" }}>
-                <div style={{ background:"#f3f3f3", borderRadius:999, height:10, overflow:"hidden", display:"flex", marginBottom:10 }}>
-                  {stats.map(s => (
-                    <div key={s.label} style={{ width:`${(s.value/total)*100}%`, background:s.color }} />
-                  ))}
-                </div>
-                <div style={{ display:"flex", flexWrap:"wrap", gap:"10px 18px", paddingBottom:16 }}>
-                  {stats.map(s => (
-                    <div key={s.label} style={{ display:"flex", alignItems:"center", gap:6 }}>
-                      <div style={{ width:8, height:8, borderRadius:99, background:s.color, flexShrink:0 }} />
-                      <span style={{ fontSize:10, color:"#666666", fontWeight:600 }}>{s.label}</span>
-                      <span style={{ fontSize:10, color:"#1a1a1a", fontWeight:700 }}>{s.value}</span>
+              <div
+                onClick={() => go(S.MY_SIGNATURES)}
+                style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:8, cursor:"pointer" }}
+              >
+                <span style={{ fontSize:14, fontWeight:700, color:"#666666", letterSpacing:0.4 }}>My Signatures</span>
+                <span style={{ display:"inline-flex", alignItems:"center", gap:5, fontSize:11, fontWeight:700, color:"#666666" }}>
+                  Open all
+                  <span style={{ fontSize:13, lineHeight:1 }}>›</span>
+                </span>
+              </div>
+              <div onClick={() => go(S.MY_SIGNATURES)} style={{ marginTop:6, background:"#fff", border:"1px solid #e4e4e4", borderRadius:14, padding:"14px 12px 12px", cursor:"pointer" }}>
+                <div style={{ padding:"2px 2px 0", marginBottom:10 }}>
+                  <div style={{ fontSize:11, color:"#8f8f8f", marginBottom:1 }}>Total signatures to sign</div>
+                  <div style={{ fontSize:24, lineHeight:1.15, fontWeight:700, color:"#1f1f1f", marginBottom:10 }}>
+                    {totalToSign}
+                  </div>
+
+                  <div style={{ display:"flex", gap:6, marginBottom:10 }}>
+                    {primaryDefs.map((m) => (
+                      <div
+                        key={`primary-${m.key}`}
+                        style={{
+                          width:`${pct(m.value)}%`,
+                          minWidth:m.value > 0 ? 42 : 18,
+                          height:20,
+                          borderRadius:8,
+                          background:m.color,
+                          boxShadow:`0 0 0 1px ${m.color}33 inset, 0 4px 12px ${m.color}66`,
+                        }}
+                      />
+                    ))}
+                  </div>
+
+                  <div style={{ display:"flex", flexDirection:"column", gap:7 }}>
+                    <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", borderBottom:"1px solid #f2edf9", paddingBottom:6 }}>
+                      <div style={{ display:"flex", alignItems:"center", gap:7 }}>
+                        <div style={{ width:8, height:8, borderRadius:99, background:"#6b7280" }} />
+                        <span style={{ fontSize:11, color:"#2f2f2f", fontWeight:600 }}>All</span>
+                      </div>
+                      <span style={{ fontSize:14, color:"#111827", fontWeight:700 }}>{allTotal}</span>
                     </div>
-                  ))}
+                    {metricDefs.map(m => (
+                      <div key={m.key} style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+                        <div style={{ display:"flex", alignItems:"center", gap:7, minWidth:0 }}>
+                          <div style={{ width:8, height:8, borderRadius:99, background:m.color, flexShrink:0 }} />
+                          <span style={{ fontSize:11, color:"#3b3b3b", fontWeight:600 }}>{m.label}</span>
+                        </div>
+                        <span style={{ fontSize:14, color:"#111827", fontWeight:700, marginLeft:8 }}>{m.value}</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-                <button style={{ width:"100%", border:"1.5px solid #e0e0e0", background:"#fff", color:"#555555", fontSize:13, fontWeight:700, padding:"12px 0", borderRadius:12, cursor:"pointer" }}>Send reminders</button>
+
+                <div style={{ display:"flex", gap:8, marginTop:2 }}>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); go(S.MY_SIGNATURES); }}
+                    style={{
+                      flex:1,
+                      border:"1.5px solid #d8d8d8",
+                      borderRadius:12,
+                      padding:"13px 0",
+                      background:"#fff",
+                      color:"#555555",
+                      fontWeight:700,
+                      fontSize:15,
+                      cursor:"pointer",
+                    }}
+                  >
+                    {`Sign (${signingInProcess})`}
+                  </button>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); go(S.MY_SIGNATURES); }}
+                    style={{
+                      flex:1,
+                      border:"1.5px solid #d8d8d8",
+                      borderRadius:12,
+                      padding:"13px 0",
+                      background:"#fff",
+                      color:"#555555",
+                      fontWeight:700,
+                      fontSize:15,
+                      cursor:"pointer",
+                    }}
+                  >
+                    {`Resolve (${resolveCount})`}
+                  </button>
+                </div>
               </div>
             </div>
           );
@@ -1020,14 +1156,104 @@ function HomeScreen({ go, clients, signatures, forms8879, extensions, reminded, 
 
         {/* ── WIDGET 4 (was E-file) — merged into Needs Attention above ── */}
 
+        {/* ENGAGEMENT LETTER WIDGET */}
+        {(() => {
+          const elSigned = clients.filter(c=>c.elStatus==="signed").length;
+          const elTotal = clients.length;
+          const myActions = clients.filter(c=>c.elStatus==="pending").length; // CPA needs to prepare/send
+          const clientActions = clients.filter(c=>c.elStatus==="sent").length; // client needs to sign
+          const pendingLetters = myActions + clientActions;
+          const lettersToSend = 23;
+          const allTotal = Math.max(elTotal, 1);
+          const defs = [
+            { key:"mine", label:"My actions", value:myActions, color:"#f2c94c" },
+            { key:"client", label:"Client actions", value:clientActions, color:"#4fc3f7" },
+            { key:"completed", label:"Completed", value:elSigned, color:"#4caf50" },
+          ];
+          const pct = (v) => Math.max(0, Math.min(100, (v / allTotal) * 100));
+          return (
+            <div style={{ marginTop:22 }}>
+              <div
+                onClick={() => go(S.EL_STATUS)}
+                style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:8, cursor:"pointer" }}
+              >
+                <span style={{ fontSize:14, fontWeight:700, color:"#666666", letterSpacing:0.4 }}>Engagement Letter</span>
+                <span style={{ display:"inline-flex", alignItems:"center", gap:5, fontSize:11, fontWeight:700, color:"#666666" }}>
+                  Open all
+                  <span style={{ fontSize:13, lineHeight:1 }}>›</span>
+                </span>
+              </div>
+
+              <div onClick={() => go(S.EL_STATUS)} style={{ marginTop:6, background:"#fff", borderRadius:14, border:"1px solid #e4e4e4", padding:"14px 12px 12px", cursor:"pointer" }}>
+                <div style={{ padding:"2px 2px 0", marginBottom:10 }}>
+                  <div style={{ fontSize:11, color:"#8f8f8f", marginBottom:1 }}>Total pending letters</div>
+                  <div style={{ fontSize:24, lineHeight:1.15, fontWeight:700, color:"#1f1f1f", marginBottom:10 }}>
+                    {pendingLetters}
+                  </div>
+
+                  <div style={{ display:"flex", gap:6, marginBottom:10 }}>
+                    {defs.map((m) => (
+                      <div
+                        key={`el-${m.key}`}
+                        style={{
+                          width:`${pct(m.value)}%`,
+                          minWidth:m.value > 0 ? 42 : 18,
+                          height:20,
+                          borderRadius:8,
+                          background:m.color,
+                          boxShadow:`0 0 0 1px ${m.color}33 inset, 0 4px 12px ${m.color}55`,
+                        }}
+                      />
+                    ))}
+                  </div>
+
+                  <div style={{ display:"flex", flexDirection:"column", gap:7 }}>
+                    <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", borderBottom:"1px solid #efefef", paddingBottom:6 }}>
+                      <div style={{ display:"flex", alignItems:"center", gap:7 }}>
+                        <div style={{ width:8, height:8, borderRadius:99, background:"#6b7280" }} />
+                        <span style={{ fontSize:11, color:"#2f2f2f", fontWeight:600 }}>All</span>
+                      </div>
+                      <span style={{ fontSize:14, color:"#111827", fontWeight:700 }}>{elTotal}</span>
+                    </div>
+                    {defs.map(m => (
+                      <div key={m.key} style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+                        <div style={{ display:"flex", alignItems:"center", gap:7, minWidth:0 }}>
+                          <div style={{ width:8, height:8, borderRadius:99, background:m.color, flexShrink:0 }} />
+                          <span style={{ fontSize:11, color:"#3b3b3b", fontWeight:600 }}>{m.label}</span>
+                        </div>
+                        <span style={{ fontSize:14, color:"#111827", fontWeight:700, marginLeft:8 }}>{m.value}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div style={{ display:"flex", gap:8, marginTop:2 }}>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); go(S.EL_WIZARD); }}
+                    style={{ flex:1, border:"none", background:"#2d2d2d", color:"#fff", fontSize:13, fontWeight:700, padding:"13px 0", borderRadius:12, cursor:"pointer" }}
+                  >
+                    {`Send letters (${lettersToSend})`}
+                  </button>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); go(S.EL_STATUS); }}
+                    style={{ flex:1, border:"1.5px solid #d8d8d8", background:"#fff", color:"#555555", fontSize:13, fontWeight:700, padding:"13px 0", borderRadius:12, cursor:"pointer" }}
+                  >
+                    {`Resolve (${clientActions})`}
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+
         {/* METRICS WIDGETS */}
-        <div style={{ marginTop:28 }}>
+        <div style={{ marginTop:12 }}>
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
             <div style={{ fontSize:14, fontWeight:700, color:"#666666", letterSpacing:0.4 }}>Metrics</div>
             <span onClick={() => go(S.METRICS)} style={{ fontSize:11, color:"#555555", fontWeight:600, cursor:"pointer" }}>See all →</span>
           </div>
 
-          {/* Row: EL Status + Organizer donuts */}
+          {/* Organizer Review widget */}
           {(() => {
             const MiniDonut = ({ segs, size=76, stroke=9, centerLabel, centerSub }) => {
               const r=(size-stroke)/2, circ=2*Math.PI*r;
@@ -1050,31 +1276,10 @@ function HomeScreen({ go, clients, signatures, forms8879, extensions, reminded, 
                 </div>
               );
             };
-            const elSigned = clients.filter(c=>c.elStatus==="signed").length;
-            const elPending = clients.filter(c=>c.elStatus==="pending"||c.elStatus==="sent").length;
-            const elTotal = clients.length;
             const orgSent = clients.filter(c=>c.step>=4).length;
             const orgNot  = clients.length - orgSent;
             return (
-              <div style={{ display:"flex", flexDirection:"column", gap:10, marginBottom:10 }}>
-                <div style={{ width:"100%", background:"#fff", borderRadius:14, border:"1px solid #e4e4e4", padding:"12px 10px" }}>
-                  <div style={{ fontSize:13, fontWeight:700, color:"#555555", marginBottom:4 }}>Engagement Letter</div>
-                  <div style={{ fontSize:11, color:"#888888", marginBottom:24 }}>Trend suggests stable completion pace; prioritize clients in the oldest bucket to keep SLAs on track.</div>
-                  <div style={{ display:"flex", alignItems:"center", gap:20, paddingLeft:32, paddingRight:32, marginTop:6 }}>
-                    <MiniDonut centerLabel={`${Math.round((elSigned/elTotal)*100)}%`} centerSub="done"
-                      segs={[{v:elSigned,c:"#7c6fcd"},{v:elPending,c:"#4fc3f7"},{v:1,c:"#ef5350"},{v:1,c:"#ffb300"}]} />
-                    <div style={{ flex:1 }}>
-                      {[{l:"Completed",c:"#7c6fcd",v:elSigned},{l:"Started",c:"#4fc3f7",v:elPending},{l:"Cancelled",c:"#ef5350",v:1},{l:"Declined",c:"#ffb300",v:1}].map(s=>(
-                        <div key={s.l} style={{ display:"flex", alignItems:"center", gap:5, marginBottom:3 }}>
-                          <div style={{ width:7, height:7, borderRadius:99, background:s.c, flexShrink:0 }} />
-                          <span style={{ fontSize:9, color:"#666666", flex:1 }}>{s.l}</span>
-                          <span style={{ fontSize:9, fontWeight:700, color:"#1a1a1a" }}>{Math.round((s.v/elTotal)*100)}%</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                  <button style={{ width:"100%", marginTop:12, border:"1.5px solid #e0e0e0", background:"#fff", color:"#555555", fontSize:12, fontWeight:700, padding:"10px 0", borderRadius:10, cursor:"pointer" }}>Send reminders</button>
-                </div>
+              <div style={{ marginBottom:10 }}>
                 <div style={{ width:"100%", background:"#fff", borderRadius:14, border:"1px solid #e4e4e4", padding:"12px 10px" }}>
                   <div style={{ fontSize:13, fontWeight:700, color:"#555555", marginBottom:4 }}>Organizer Review</div>
                   <div style={{ fontSize:11, color:"#888888", marginBottom:24 }}>Based on current intake, organizer returns are expected to peak soon—plan reviewer bandwidth accordingly.</div>
@@ -1136,6 +1341,59 @@ function HomeScreen({ go, clients, signatures, forms8879, extensions, reminded, 
 
         </div>
 
+
+      {/* Work scope sheet */}
+      {workScopeSheetOpen && (
+        <div style={{ position:"absolute", inset:0, zIndex:50 }}>
+          <div onClick={closeWorkScopeSheet} style={{ position:"absolute", inset:0, background:"rgba(0,0,0,0.35)" }} />
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              position:"absolute",
+              left:0,
+              right:0,
+              bottom:0,
+              background:"#fff",
+              borderRadius:"16px 16px 0 0",
+              padding:"14px 16px 18px",
+              boxShadow:"0 -12px 40px rgba(0,0,0,0.25)",
+            }}
+          >
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
+              <div style={{ fontSize:14, fontWeight:700, color:"#1a1a1a" }}>Select work view</div>
+              <button onClick={closeWorkScopeSheet} style={{ border:"none", background:"#f2f2f2", width:28, height:28, borderRadius:99, cursor:"pointer", color:"#555" }}>✕</button>
+            </div>
+
+            <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+              {[
+                { id:"my", label:"My work", desc:"Only tasks assigned to me" },
+                { id:"all", label:"All work", desc:"Team-wide queue and workload" },
+                { id:"favorites", label:"Favorites", desc:"Pinned clients and priority items" },
+              ].map((opt) => {
+                const active = workScope === opt.id;
+                return (
+                  <button
+                    key={opt.id}
+                    onClick={() => { setWorkScope(opt.id); closeWorkScopeSheet(); }}
+                    style={{
+                      width:"100%",
+                      border: active ? "1.5px solid #2d2d2d" : "1.5px solid #e0e0e0",
+                      background: active ? "#f7f7f7" : "#fff",
+                      borderRadius:12,
+                      padding:"10px 12px",
+                      textAlign:"left",
+                      cursor:"pointer",
+                    }}
+                  >
+                    <div style={{ fontSize:13, fontWeight:700, color:"#1a1a1a" }}>{opt.label}</div>
+                    <div style={{ fontSize:11, color:"#888888", marginTop:2 }}>{opt.desc}</div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Remind sheet */}
       {remindSheet && (
@@ -2212,45 +2470,228 @@ function ELWizardScreen({ go, ctx, clients, showToast }) {
 // ══════════════════════════════════════════════════════════════════
 // MY SIGNATURES SCREEN
 // ══════════════════════════════════════════════════════════════════
-function MySignaturesScreen({ go, signatures, signed }) {
-  const pending = signatures.filter(s => !signed.includes(s.id));
-  const done    = signatures.filter(s =>  signed.includes(s.id));
+function MySignaturesScreen({ go, signatures, forms8879, signed }) {
+  const [query, setQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState("All");
+  const [sortBy, setSortBy] = useState("Newest");
+  const [expanded, setExpanded] = useState(null);
+
+  const now = Date.now();
+  const statusColors = {
+    "Signing in Process": { dot:"#ec4899", bg:"#fde7f3", text:"#ad1457" },
+    "Completed": { dot:"#22c55e", bg:"#e8f7ee", text:"#1f7a3f" },
+    "Cancelled": { dot:"#f4a257", bg:"#fff3e8", text:"#b7611d" },
+    "Expired": { dot:"#b71c1c", bg:"#fae8e8", text:"#8f1111" },
+    "Declined": { dot:"#f4a7b9", bg:"#fff0f4", text:"#b85872" },
+    "Signer Authentication Failed": { dot:"#10b981", bg:"#e7faf3", text:"#0f7a58" },
+  };
+
+  const sigRows = signatures.map((s, i) => {
+    const isSigned = signed.includes(s.id);
+    const status = isSigned ? "Completed" : "Signing in Process";
+    const updatedAt = now - s.days * 86400000 - i * 600000;
+    return {
+      id: `sig-${s.id}`,
+      signer: s.client,
+      status,
+      document: s.doc,
+      routingMap: "Direct",
+      expirationDate: isSigned ? "Completed" : `${Math.max(1, 10 - s.days)}d left`,
+      signedDocument: isSigned ? `${s.client.split(" ")[0]}_${s.type}.pdf` : "Pending",
+      cancelledBy: "-",
+      cancelledDate: "-",
+      envelopeId: `ENV-${100000 + s.id}`,
+      history: isSigned ? "Signed by client" : `Waiting ${s.days} day${s.days > 1 ? "s" : ""}`,
+      updatedAt,
+      actionSig: { id: s.id, client: s.client, doc: s.doc, type: s.type, days: s.days },
+    };
+  });
+
+  const formRows = forms8879.map((f, i) => {
+    const localId = `form_${f.id}`;
+    const localSigned = signed.includes(localId);
+    const baseStatusMap = {
+      pending: "Signing in Process",
+      signed: "Completed",
+      failed: "Signer Authentication Failed",
+    };
+    const status = localSigned ? "Completed" : (baseStatusMap[f.status] || "Signing in Process");
+    const updatedAt = now - (i + 1) * 3600000;
+    return {
+      id: `f8879-${f.id}`,
+      signer: f.client,
+      status,
+      document: `8879 e-file Authorization (${f.jurisdiction})`,
+      routingMap: "Email + SMS",
+      expirationDate: status === "Completed" ? "Completed" : "Awaiting signature",
+      signedDocument: status === "Completed" ? `8879_${f.client.replace(/\s+/g, "_")}.pdf` : "Pending",
+      cancelledBy: "-",
+      cancelledDate: "-",
+      envelopeId: `ENV-${300000 + f.id}`,
+      history: `Sent ${f.sent}`,
+      updatedAt,
+      actionSig: { id: localId, client: f.client, doc: `8879 — ${f.jurisdiction}`, type: "8879", days: 0 },
+    };
+  });
+
+  const rows = [...sigRows, ...formRows];
+
+  const statuses = [
+    "All",
+    "Signing in Process",
+    "Completed",
+    "Cancelled",
+    "Expired",
+    "Declined",
+    "Signer Authentication Failed",
+  ];
+
+  const counts = statuses.reduce((acc, s) => {
+    acc[s] = s === "All" ? rows.length : rows.filter(r => r.status === s).length;
+    return acc;
+  }, {});
+
+  const q = query.trim().toLowerCase();
+  let filtered = rows.filter(r => {
+    const matchesStatus = statusFilter === "All" ? true : r.status === statusFilter;
+    const matchesQuery = !q
+      ? true
+      : `${r.signer} ${r.document} ${r.envelopeId} ${r.status}`.toLowerCase().includes(q);
+    return matchesStatus && matchesQuery;
+  });
+
+  filtered = [...filtered].sort((a, b) => {
+    if (sortBy === "Oldest") return a.updatedAt - b.updatedAt;
+    if (sortBy === "Status") return a.status.localeCompare(b.status);
+    return b.updatedAt - a.updatedAt; // Newest
+  });
+
   return (
     <div style={{ flex:1 }}>
-      <Header title="My Signatures" sub={`${pending.length} pending`} back onBack={() => go(S.HOME)} />
-      <div style={{ padding:"12px 18px 20px" }}>
-        {pending.length > 0 && (
-          <>
-            <div style={{ fontSize:10, fontWeight:700, color:"#999999", letterSpacing:1.5, marginBottom:8 }}>PENDING</div>
-            {pending.map(s => (
-              <div key={s.id} style={{ background:"#fff", borderRadius:14, padding:14, marginBottom:10, border:"1px solid #d8d8d8" }}>
-                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:10 }}>
-                  <div>
-                    <div style={{ fontWeight:700, fontSize:14, color:"#1a1a1a" }}>{s.client}</div>
-                    <div style={{ fontSize:12, color:"#777777", marginTop:2 }}>{s.doc}</div>
-                    <div style={{ marginTop:5 }}><span style={{ fontSize:10, fontWeight:700, background: s.type==="8879"?"#ebebeb":"#e8e8e8", color: s.type==="8879"?"#555555":"#444444", borderRadius:4, padding:"2px 7px" }}>{s.type}</span></div>
+      <Header title="My Signatures" sub={`${counts["Signing in Process"]} in process`} back onBack={() => go(S.HOME)} />
+      <div style={{ padding:"12px 14px 20px" }}>
+        <div style={{ display:"flex", gap:6, overflowX:"auto", paddingBottom:6, marginBottom:10 }}>
+          {statuses.map((s) => (
+            <button
+              key={s}
+              onClick={() => setStatusFilter(s)}
+              style={{
+                border: statusFilter === s ? "1px solid #2d2d2d" : "1px solid #dddddd",
+                background: statusFilter === s ? "#2d2d2d" : "#fff",
+                color: statusFilter === s ? "#fff" : "#555555",
+                borderRadius:99,
+                padding:"7px 10px",
+                fontSize:10,
+                fontWeight:700,
+                whiteSpace:"nowrap",
+                cursor:"pointer",
+              }}
+            >
+              {s} {counts[s]}
+            </button>
+          ))}
+        </div>
+
+        <div style={{ display:"flex", gap:8, marginBottom:10 }}>
+          <div style={{ flex:1, background:"#fff", border:"1px solid #dddddd", borderRadius:10, padding:"8px 10px", display:"flex", alignItems:"center", gap:8 }}>
+            <span style={{ color:"#999999", fontSize:12 }}>⌕</span>
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search signer, document, envelope..."
+              style={{ border:"none", outline:"none", width:"100%", fontSize:12, background:"transparent", color:"#333333" }}
+            />
+          </div>
+          <button
+            onClick={() => setSortBy((v) => v === "Newest" ? "Oldest" : v === "Oldest" ? "Status" : "Newest")}
+            style={{ border:"1px solid #dddddd", background:"#fff", borderRadius:10, padding:"0 11px", fontSize:10, fontWeight:700, color:"#555555", cursor:"pointer", whiteSpace:"nowrap" }}
+          >
+            {sortBy}
+          </button>
+        </div>
+
+        <div style={{ background:"#fff", border:"1px solid #dddddd", borderRadius:12, overflow:"hidden" }}>
+          <div style={{ display:"grid", gridTemplateColumns:"1.25fr 0.75fr 0.75fr", gap:8, padding:"8px 10px", background:"#f6f7fb", borderBottom:"1px solid #ececec" }}>
+            <span style={{ fontSize:9, fontWeight:700, letterSpacing:0.7, color:"#888888" }}>SIGNER</span>
+            <span style={{ fontSize:9, fontWeight:700, letterSpacing:0.7, color:"#888888" }}>STATUS</span>
+            <span style={{ fontSize:9, fontWeight:700, letterSpacing:0.7, color:"#888888", textAlign:"right" }}>ACTION</span>
+          </div>
+
+          {filtered.length === 0 && (
+            <div style={{ padding:"18px 12px", textAlign:"center", color:"#777777", fontSize:12 }}>
+              No signatures found for this filter.
+            </div>
+          )}
+
+          {filtered.map((row, idx) => {
+            const tone = statusColors[row.status] || statusColors["Signing in Process"];
+            const isOpen = expanded === row.id;
+            const needsSign = row.status === "Signing in Process" || row.status === "Signer Authentication Failed";
+            return (
+              <div key={row.id} style={{ borderTop: idx > 0 ? "1px solid #f0f0f0" : "none", padding:"10px 10px 11px" }}>
+                <div style={{ display:"grid", gridTemplateColumns:"1.25fr 0.75fr 0.75fr", gap:8, alignItems:"center" }}>
+                  <div style={{ minWidth:0 }}>
+                    <div style={{ fontSize:12, fontWeight:700, color:"#1f1f1f", marginBottom:2, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{row.signer}</div>
+                    <div style={{ fontSize:10.5, color:"#666666", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{row.document}</div>
                   </div>
-                  <span style={{ fontSize:11, color: s.days>5?"#444444":"#999999" }}>{s.days}d waiting</span>
+                  <div style={{ justifySelf:"start", display:"inline-flex", alignItems:"center", gap:6, background:tone.bg, color:tone.text, borderRadius:99, padding:"4px 8px", maxWidth:"100%" }}>
+                    <span style={{ width:6, height:6, borderRadius:99, background:tone.dot, flexShrink:0 }} />
+                    <span style={{ fontSize:9.5, fontWeight:700, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{row.status}</span>
+                  </div>
+                  <button
+                    onClick={() => needsSign ? go(S.SIGN_DOC, { sig: row.actionSig }) : setExpanded(isOpen ? null : row.id)}
+                    style={{ justifySelf:"end", border:"none", background:"#2563eb", color:"#fff", borderRadius:7, padding:"7px 12px", fontSize:10.5, fontWeight:700, cursor:"pointer" }}
+                  >
+                    {needsSign ? "Sign" : "View"}
+                  </button>
                 </div>
-                <button onClick={() => go(S.SIGN_DOC, { sig:s })} style={{ width:"100%", border:"none", borderRadius:10, padding:10, background:"#2d2d2d", color:"#fff", fontWeight:700, fontSize:13, cursor:"pointer" }}>Review & Sign</button>
-              </div>
-            ))}
-          </>
-        )}
-        {done.length > 0 && (
-          <>
-            <div style={{ fontSize:10, fontWeight:700, color:"#999999", letterSpacing:1.5, margin:"12px 0 8px" }}>COMPLETED</div>
-            {done.map(s => (
-              <div key={s.id} style={{ background:"#f0f0f0", borderRadius:12, padding:"12px 14px", marginBottom:8, border:"1px solid #d0d0d0", display:"flex", alignItems:"center", gap:10 }}>
-                <span style={{ color:"#4a4a4a", fontSize:18 }}>✓</span>
-                <div style={{ flex:1 }}>
-                  <div style={{ fontWeight:600, fontSize:13, color:"#3a3a3a" }}>{s.client}</div>
-                  <div style={{ fontSize:11, color:"#9a9a9a" }}>{s.doc}</div>
+
+                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginTop:8 }}>
+                  <div style={{ background:"#fafafa", border:"1px solid #efefef", borderRadius:8, padding:"7px 8px" }}>
+                    <div style={{ fontSize:9, color:"#9a9a9a", marginBottom:2 }}>Expiration Date</div>
+                    <div style={{ fontSize:10.5, color:"#333333", fontWeight:600 }}>{row.expirationDate}</div>
+                  </div>
+                  <div style={{ background:"#fafafa", border:"1px solid #efefef", borderRadius:8, padding:"7px 8px" }}>
+                    <div style={{ fontSize:9, color:"#9a9a9a", marginBottom:2 }}>Envelope ID</div>
+                    <div style={{ fontSize:10.5, color:"#333333", fontWeight:600, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{row.envelopeId}</div>
+                  </div>
                 </div>
+
+                <button
+                  onClick={() => setExpanded(isOpen ? null : row.id)}
+                  style={{ marginTop:7, border:"none", background:"transparent", color:"#666666", fontSize:10.5, fontWeight:600, padding:0, cursor:"pointer" }}
+                >
+                  {isOpen ? "Hide details" : "Show details"}
+                </button>
+
+                {isOpen && (
+                  <div style={{ marginTop:7, background:"#f8f8f8", border:"1px solid #ececec", borderRadius:8, padding:"8px 9px", display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
+                    <div>
+                      <div style={{ fontSize:9, color:"#9a9a9a" }}>Routing Map</div>
+                      <div style={{ fontSize:10.5, color:"#333333", fontWeight:600 }}>{row.routingMap}</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize:9, color:"#9a9a9a" }}>Signed Document</div>
+                      <div style={{ fontSize:10.5, color:"#333333", fontWeight:600, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{row.signedDocument}</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize:9, color:"#9a9a9a" }}>Cancelled By</div>
+                      <div style={{ fontSize:10.5, color:"#333333", fontWeight:600 }}>{row.cancelledBy}</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize:9, color:"#9a9a9a" }}>Cancelled Date</div>
+                      <div style={{ fontSize:10.5, color:"#333333", fontWeight:600 }}>{row.cancelledDate}</div>
+                    </div>
+                    <div style={{ gridColumn:"1 / -1" }}>
+                      <div style={{ fontSize:9, color:"#9a9a9a" }}>History</div>
+                      <div style={{ fontSize:10.5, color:"#333333", fontWeight:600 }}>{row.history}</div>
+                    </div>
+                  </div>
+                )}
               </div>
-            ))}
-          </>
-        )}
+            );
+          })}
+        </div>
       </div>
     </div>
   );
