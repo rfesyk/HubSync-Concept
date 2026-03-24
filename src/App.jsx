@@ -186,6 +186,84 @@ const buildStaffingRows = (list) => {
   });
 };
 
+const STAFFING_WORKFLOW_ORDER = ["EL", "Request List", "Upload", "Organizer", "Review", "Sign Return", "Payments"];
+const STAFFING_WORKFLOW_COLORS = {
+  EL: "#f59e0b",
+  "Request List": "#84cc16",
+  Upload: "#0ea5e9",
+  Organizer: "#14b8a6",
+  Review: "#ef4444",
+  "Sign Return": "#6366f1",
+  Payments: "#06b6d4",
+};
+
+const buildStaffingSummary = (rows, list) => {
+  const byId = new Map(list.map((c) => [c.id, c]));
+  const total = rows.length;
+  const awaiting = rows.filter((r) => r.status === "Awaiting Client Info").length;
+  const review = rows.filter((r) => r.status === "QC Review").length;
+  const prep = rows.filter((r) => r.status === "Preparation").length;
+  const atRisk = rows.filter((r) => {
+    const c = byId.get(r.id);
+    return !!(c?.urgent || c?.risk === "high");
+  }).length;
+  const partners = [...new Set(rows.map((r) => r.partner))];
+  const avgStep = total
+    ? (rows.reduce((sum, r) => sum + (byId.get(r.id)?.step || 1), 0) / total).toFixed(1)
+    : "0.0";
+
+  const stages = STAFFING_WORKFLOW_ORDER
+    .map((name) => ({
+      name,
+      count: rows.filter((r) => r.workflow === name).length,
+      color: STAFFING_WORKFLOW_COLORS[name] || "#6b7280",
+    }))
+    .filter((s) => s.count > 0)
+    .sort((a, b) => b.count - a.count);
+
+  const maxStage = Math.max(1, ...stages.map((s) => s.count));
+  const actions = rows
+    .map((r) => {
+      const c = byId.get(r.id);
+      const riskWeight = c?.risk === "high" ? 3 : c?.risk === "med" ? 2 : 1;
+      const priority = (c?.urgent ? 4 : 0) + riskWeight + (r.status === "Awaiting Client Info" ? 3 : r.status === "QC Review" ? 2 : 1);
+      let nextAction = "Reassign reviewer";
+      if (r.status === "Awaiting Client Info") nextAction = "Ping client";
+      else if (r.workflow === "EL") nextAction = "Send engagement letter";
+      else if (r.workflow === "Request List") nextAction = "Review request list";
+      else if (r.workflow === "Upload") nextAction = "Validate uploads";
+      else if (r.workflow === "Organizer") nextAction = "Start organizer review";
+      else if (r.workflow === "Review") nextAction = "Start quality review";
+      else if (r.workflow === "Sign Return") nextAction = "Collect signature";
+      else if (r.workflow === "Payments") nextAction = "Close payment step";
+      return {
+        id: r.id,
+        client: r.client,
+        partner: r.partner,
+        workflow: r.workflow,
+        status: r.status,
+        step: c?.step || 1,
+        steps: c?.steps || 7,
+        nextAction,
+        priority,
+      };
+    })
+    .sort((a, b) => b.priority - a.priority || a.step - b.step || a.client.localeCompare(b.client));
+
+  return {
+    total,
+    awaiting,
+    review,
+    prep,
+    atRisk,
+    partners: partners.length,
+    avgStep,
+    stages,
+    maxStage,
+    actions,
+  };
+};
+
 const auditLog = [
   { id:1, action:"Document uploaded", detail:"W-2 Workbook.pdf", who:"Client", time:"10:24 today" },
   { id:2, action:"Reminder sent",     detail:"Upload documents reminder", who:"CPA", time:"9:00 today" },
@@ -1295,7 +1373,7 @@ function HomeScreen({ go, clients, signatures, forms8879, extensions, reminded, 
       ? "My clients"
       : workScope === "all"
         ? "All work"
-        : "Recent clients";
+        : "10 recently viewed clients";
   const showPullSearch = showScrollSearch || !!homeSearch.trim();
 
   const radioControl = (isActive) => (
@@ -1883,91 +1961,203 @@ function HomeScreen({ go, clients, signatures, forms8879, extensions, reminded, 
 
         {/* STAFFING WIDGET */}
         {(() => {
-          const staffingRows = buildStaffingRows(scopedClients).slice(0, 12);
+          const staffingRows = buildStaffingRows(scopedClients);
+          const staffing = buildStaffingSummary(staffingRows, scopedClients);
+          const topActions = staffing.actions.slice(0, 3);
+          const targetLoad = 3.0;
+          const loadPerPartner = staffing.partners ? staffing.total / staffing.partners : 0;
+          const blockedNow = scopedClients.filter((c) => c.blockedBy === "client").length;
+          const waitingOver5 = scopedClients.filter((c) => c.blockedBy === "client" && (((c.id * 3) % 9) + 1) > 5).length;
+          const reviewQueue = staffingRows.filter((r) => r.workflow === "Review").length;
+          const readyForReassignment = blockedNow === 0 ? 0 : Math.max(1, Math.min(topActions.length || 1, blockedNow));
+          const backlogLegend = [
+            { label:"All active returns", value:staffing.total, color:"#6b7280" },
+            { label:"Awaiting client info", value:blockedNow, color:"#4cb3e3" },
+            { label:"In review queue", value:reviewQueue, color:"#e8bc3f" },
+            { label:"Reassignable today", value:readyForReassignment, color:"#49ad4f" },
+          ];
+          const onTimeForecast = Math.max(
+            68,
+            Math.min(98, Math.round(98 - (staffing.atRisk * 3 + waitingOver5 * 2 + Math.max(0, loadPerPartner - targetLoad) * 8)))
+          );
+          const missRiskCount = Math.max(0, Math.round((100 - onTimeForecast) / 100 * staffing.total));
+          const partnerLoadMap = staffingRows.reduce((acc, r) => {
+            acc[r.partner] = (acc[r.partner] || 0) + 1;
+            return acc;
+          }, {});
+          const partnerLoadEntries = Object.entries(partnerLoadMap);
+          const topPartner = [...partnerLoadEntries].sort((a, b) => b[1] - a[1])[0];
+          const lowPartner = [...partnerLoadEntries].sort((a, b) => a[1] - b[1])[0];
+          const clampPct = (n) => Math.max(0, Math.min(100, n || 0));
+          const agingPct = blockedNow ? clampPct((waitingOver5 / blockedNow) * 100) : 0;
+          const agingFilled = Math.round((agingPct / 100) * 8);
+          const riskColor = onTimeForecast >= 90 ? "#2f6b45" : onTimeForecast >= 82 ? "#8b6d2f" : "#a44b4b";
+          const agingColor = waitingOver5 >= 4 ? "#a44b4b" : waitingOver5 >= 2 ? "#9a6f2f" : waitingOver5 > 0 ? "#6f7b93" : "#2f6b45";
+          const staffingCardTitleStyle = {
+            fontSize:11.5,
+            fontWeight:700,
+            color:"#5f6677",
+            letterSpacing:0.3,
+            marginBottom:6,
+          };
+          const loadDelta = loadPerPartner - targetLoad;
+          const loadInsight =
+            loadDelta > 0.6
+              ? `Load is ${loadDelta.toFixed(1)} above target. Reassign ${Math.max(1, Math.round(loadDelta))} return${Math.round(loadDelta) > 1 ? "s" : ""} to avoid review bottlenecks.`
+              : loadDelta < -0.6
+                ? `Capacity is ${Math.abs(loadDelta).toFixed(1)} under target. Pull forward review work from next step to keep team utilization steady.`
+                : `Capacity is on target. Keep review queue at ${Math.max(2, reviewQueue)} or fewer active files per reviewer to stay balanced.`;
+          const staffingPrimaryBtnStyle = {
+            width:"100%",
+            border:"none",
+            background:"#0065FF",
+            color:"#fff",
+            fontSize:13,
+            fontWeight:700,
+            padding:"13px 0",
+            borderRadius:12,
+            cursor:"pointer",
+          };
+          const staffingSecondaryBtnStyle = {
+            width:"100%",
+            border:"1.5px solid #d8d8d8",
+            background:"#fff",
+            color:"#555555",
+            fontSize:13,
+            fontWeight:700,
+            padding:"13px 0",
+            borderRadius:12,
+            cursor:"pointer",
+          };
+
           return (
             <div style={{ marginTop:16 }}>
               <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
                 <div style={{ fontSize:14, fontWeight:700, color:"#666666", letterSpacing:0.4 }}>Staffing</div>
               </div>
-              <div style={{ marginLeft:-18, marginRight:-18, background:"#fff", borderTop:"1px solid #ececec", borderBottom:"1px solid #ececec" }}>
-                <div style={{ overflowX:"auto", WebkitOverflowScrolling:"touch", padding:"0 16px" }}>
-                  <div style={{ minWidth:700 }}>
-                    <div style={{ display:"grid", gridTemplateColumns:"1.25fr 1fr 1fr 0.95fr 1fr", gap:0, background:"#f8f8f8", borderBottom:"1px solid #ececec" }}>
-                      {["Client", "Workflow", "Partner", "Office", "Status"].map((h) => (
-                        <div key={h} style={{ padding:"9px 12px", fontSize:10, fontWeight:700, color:"#4b4b4b", letterSpacing:0.2 }}>{h}</div>
-                      ))}
-                    </div>
-                    {staffingRows.map((row, idx) => (
-                      <div
-                        key={row.id}
-                        style={{
-                          display:"grid",
-                          gridTemplateColumns:"1.25fr 1fr 1fr 0.95fr 1fr",
-                          gap:0,
-                          borderBottom: idx === staffingRows.length - 1 ? "none" : "1px solid #efefef",
-                          background: idx % 2 ? "#fcfcfc" : "#fff",
-                        }}
-                      >
-                        <div style={{ padding:"11px 12px", minWidth:0 }}>
-                          <div style={{ fontSize:11, color:"#2563eb", fontWeight:600, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{row.client}</div>
+              <div style={{ background:"#fff", border:"1px solid #e4e4e4", borderRadius:14, padding:"12px 12px 12px", marginBottom:10 }}>
+                {(() => {
+                  const loadMax = 6;
+                  const loadPct = Math.max(0, Math.min((loadPerPartner / loadMax) * 100, 100));
+                  const optimalMin = 38;
+                  const optimalMax = 62;
+                  const loadState =
+                    loadPerPartner < 2.2
+                      ? { label:"Underload", color:"#4d77c9", bg:"#eef3ff", border:"#dbe5ff" }
+                      : loadPerPartner > 4.2
+                        ? { label:"Overload", color:"#a44b4b", bg:"#fbefef", border:"#f2dede" }
+                        : { label:"Optimal", color:"#2f6b45", bg:"#edf7f0", border:"#daecdf" };
+
+                  return (
+                    <div style={{ marginBottom:12 }}>
+                      <div style={staffingCardTitleStyle}>Staff load</div>
+                      <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", gap:10, marginBottom:8 }}>
+                        <div style={{ flex:1, minWidth:0 }}>
+                          <div style={{ fontSize:15, fontWeight:800, color:loadState.color }}>{loadState.label}</div>
+                          <div style={{ fontSize:11, color:"#6b7280", lineHeight:1.35, marginTop:4 }}>
+                            {loadInsight}
+                          </div>
                         </div>
-                        <div style={{ padding:"11px 12px", minWidth:0 }}>
-                          <span
-                            style={{
-                              display:"inline-flex",
-                              alignItems:"center",
-                              gap:5,
-                              minWidth:0,
-                              fontSize:10,
-                              fontWeight:600,
-                              color:"#4a556b",
-                              background:`${row.workflowColor}16`,
-                              border:`1px solid ${row.workflowColor}66`,
-                              borderRadius:999,
-                              padding:"3px 8px",
-                              whiteSpace:"nowrap",
-                              overflow:"hidden",
-                              textOverflow:"ellipsis",
-                            }}
-                          >
-                            <span style={{ width:6, height:6, borderRadius:99, background:row.workflowColor, flexShrink:0 }} />
-                            {row.workflow}
-                          </span>
-                        </div>
-                        <div style={{ padding:"11px 12px", minWidth:0 }}>
-                          <div style={{ fontSize:10.5, color:"#3f3f3f", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{row.partner}</div>
-                        </div>
-                        <div style={{ padding:"11px 12px", minWidth:0 }}>
-                          <div style={{ fontSize:10.5, color:"#3f3f3f", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{row.office}</div>
-                        </div>
-                        <div style={{ padding:"11px 12px", minWidth:0, display:"flex", alignItems:"center" }}>
-                          <span
-                            style={{
-                              fontSize:9.5,
-                              fontWeight:700,
-                              color:row.status === "Awaiting Client Info" ? "#a44b4b" : "#3f3f3f",
-                              background:row.status === "Awaiting Client Info" ? "#f8eded" : "#f1f1f1",
-                              borderRadius:999,
-                              padding:"4px 8px",
-                              whiteSpace:"nowrap",
-                              overflow:"hidden",
-                              textOverflow:"ellipsis",
-                            }}
-                          >
-                            {row.status}
-                          </span>
-                        </div>
+                        <span style={{ fontSize:10, fontWeight:700, color:loadState.color, background:loadState.bg, border:`1px solid ${loadState.border}`, borderRadius:999, padding:"3px 8px" }}>
+                          {loadPerPartner.toFixed(1)} / partner
+                        </span>
                       </div>
+                      <div style={{ position:"relative", height:16, borderRadius:999, background:"#eef1f6", border:"1px solid #e2e6ee", overflow:"hidden" }}>
+                        <div style={{ position:"absolute", top:0, bottom:0, left:0, width:`${loadPct}%`, background:"#2e86de" }} />
+                        <div style={{ position:"absolute", left:`${optimalMin}%`, top:-3, bottom:-3, width:2, background:"#9aa3b2", borderRadius:99, transform:"translateX(-1px)" }} />
+                        <div style={{ position:"absolute", left:`${optimalMax}%`, top:-3, bottom:-3, width:2, background:"#9aa3b2", borderRadius:99, transform:"translateX(-1px)" }} />
+                      </div>
+                      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", fontSize:10, color:"#7a818f", marginTop:5 }}>
+                        <span>Low</span>
+                        <span style={{ fontWeight:400, color:"#7a818f" }}>Optimal</span>
+                        <span>High</span>
+                      </div>
+                    </div>
+                  );
+                })()}
+                <button
+                  onClick={() => go(S.STAFFING)}
+                  style={staffingSecondaryBtnStyle}
+                >
+                  Manage staff
+                </button>
+              </div>
+
+              <div style={{ background:"#fff", border:"1px solid #e4e4e4", borderRadius:14, marginBottom:8, overflow:"hidden", boxShadow:"0 2px 10px rgba(15,23,42,0.03)" }}>
+                <div style={{ height:3, background:"linear-gradient(90deg, #d47a7a 0%, #efb15e 80%)" }} />
+                <div style={{ padding:"11px 12px 12px" }}>
+                  <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:6 }}>
+                    <div style={staffingCardTitleStyle}>Backlog distribution</div>
+                    <span style={{ fontSize:9.5, fontWeight:700, color:agingColor, background:`${agingColor}14`, border:`1px solid ${agingColor}33`, borderRadius:999, padding:"2px 7px" }}>
+                      {blockedNow > 0 ? "Needs rebalance" : "Balanced"}
+                    </span>
+                  </div>
+                  <div style={{ fontSize:11, color:"#6b7280", lineHeight:1.35, marginBottom:8 }}>
+                    Current backlog is concentrated in intake and review. Rebalancing owners now will prevent late-week pileups.
+                  </div>
+                  <div style={{ marginBottom:6, display:"grid", gridTemplateColumns:"repeat(8, 1fr)", gap:4 }}>
+                    {Array.from({ length:8 }).map((_, i) => (
+                      <div key={i} style={{ height:8, borderRadius:3, background: i < agingFilled ? "#d97777" : "#eceff4" }} />
                     ))}
                   </div>
+                  <div style={{ marginBottom:8 }}>
+                    {backlogLegend.map((item, idx) => (
+                      <div key={item.label}>
+                        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:8, padding:"6px 0" }}>
+                          <div style={{ display:"flex", alignItems:"center", gap:8, minWidth:0 }}>
+                            <span style={{ width:8, height:8, borderRadius:99, background:item.color, flexShrink:0 }} />
+                            <span style={{ fontSize:11, color:"#333333", fontWeight:600 }}>{item.label}</span>
+                          </div>
+                          <span style={{ fontSize:11, color:"#111827", fontWeight:700 }}>{item.value}</span>
+                        </div>
+                        {idx === 0 && <div style={{ height:1, background:"#eceff4", margin:"1px 0 4px" }} />}
+                      </div>
+                    ))}
+                    <div style={{ fontSize:10.5, color:"#6b7280", marginTop:2 }}>
+                      {reviewQueue} in review queue · {readyForReassignment} ready for reassignment
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => go(S.STAFFING, { mode:"table" })}
+                    style={staffingSecondaryBtnStyle}
+                  >
+                    Reassign workload
+                  </button>
                 </div>
               </div>
-              <button
-                onClick={() => go(S.STAFFING)}
-                style={{ width:"100%", marginTop:10, border:"none", background:"transparent", color:"#555555", fontSize:12, fontWeight:700, padding:"6px 0", cursor:"pointer" }}
-              >
-                See all →
-              </button>
+
+              <div style={{ background:"#fff", border:"1px solid #e4e4e4", borderRadius:14, marginBottom:8, overflow:"hidden", boxShadow:"0 2px 10px rgba(15,23,42,0.03)" }}>
+                <div style={{ height:3, background:"linear-gradient(90deg, #5daa77 0%, #8fc09f 80%)" }} />
+                <div style={{ padding:"11px 12px 12px" }}>
+                  <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:6 }}>
+                    <div style={staffingCardTitleStyle}>Deadline coverage</div>
+                    <span style={{ fontSize:9.5, fontWeight:700, color:riskColor, background:`${riskColor}14`, border:`1px solid ${riskColor}33`, borderRadius:999, padding:"2px 7px" }}>
+                      {missRiskCount > 0 ? `${missRiskCount} uncovered` : "Covered"}
+                    </span>
+                  </div>
+                  <div style={{ marginBottom:6 }}>
+                    <div style={{ position:"relative", height:8, borderRadius:99, background:"#f5e6e6", overflow:"hidden" }}>
+                      <div style={{ position:"absolute", inset:"0 auto 0 0", width:`${clampPct(onTimeForecast)}%`, background:"#5daa77" }} />
+                    </div>
+                  </div>
+                  <div style={{ fontSize:11, color:"#1f2937", fontWeight:600, marginBottom:3 }}>
+                    {onTimeForecast}% deadline coverage
+                  </div>
+                  <div style={{ fontSize:11, color:"#6b7280", lineHeight:1.35, marginBottom:9 }}>
+                    {missRiskCount} deadline{missRiskCount === 1 ? "" : "s"} currently uncovered. {topPartner?.[0] || "Top partner"} is above target load while {lowPartner?.[0] || "lowest partner"} has capacity.
+                  </div>
+                  <button
+                    onClick={() => {
+                      showToast("Staffing plan applied");
+                      go(S.STAFFING, { mode:"table" });
+                    }}
+                    style={staffingPrimaryBtnStyle}
+                  >
+                    Apply staffing plan
+                  </button>
+                </div>
+              </div>
+
             </div>
           );
         })()}
@@ -1998,7 +2188,7 @@ function HomeScreen({ go, clients, signatures, forms8879, extensions, reminded, 
               {[
                 { id:"my", label:"My clients", desc:"Clients assigned to me", subItems: myClients },
                 { id:"all", label:"All work", desc:"Team-wide queue and workload" },
-                { id:"favorites", label:"Recent clients", desc:"Recently viewed clients" },
+                { id:"favorites", label:"10 recently viewed clients", desc:"Recently viewed clients" },
               ].map((opt) => {
                 const activeScope = workScope === opt.id && selectedClientId == null;
                 const hasSubItems = !!opt.subItems?.length;
@@ -3996,10 +4186,13 @@ function DMSFileScreen({ go, ctx }) {
 // ══════════════════════════════════════════════════════════════════
 // STAFFING SCREEN
 // ══════════════════════════════════════════════════════════════════
-function StaffingScreen({ go, clients }) {
+function StaffingScreen({ go, clients, ctx }) {
   const [q, setQ] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
-  const rows = buildStaffingRows(clients).filter((r) => {
+  const isTableMode = ctx?.mode === "table";
+
+  const allRows = buildStaffingRows(clients);
+  const rows = allRows.filter((r) => {
     const query = q.trim().toLowerCase();
     const matchesQuery = !query || [r.client, r.workflow, r.partner, r.office, r.region, r.status]
       .join(" ")
@@ -4008,20 +4201,21 @@ function StaffingScreen({ go, clients }) {
     const matchesStatus = statusFilter === "All" || r.status === statusFilter;
     return matchesQuery && matchesStatus;
   });
+  const summary = buildStaffingSummary(rows, clients);
 
-  const statusChipColor = (s) => {
-    if (s === "Awaiting Client Info") return "#a44b4b";
-    if (s === "QC Review") return "#3b6f4a";
-    return "#555555";
+  const statusPill = (status) => {
+    if (status === "Awaiting Client Info") return { bg:"#fdf1f1", bd:"#f4d8d8", c:"#a44b4b", label:"Awaiting client" };
+    if (status === "QC Review") return { bg:"#eef8f1", bd:"#d9ecdf", c:"#3b6f4a", label:"QC review" };
+    return { bg:"#f2f4f8", bd:"#e5e8ef", c:"#5d6574", label:"Preparation" };
   };
 
   return (
     <div style={{ flex:1 }}>
       <Header
         title="Staffing"
-        sub={`${rows.length} records`}
+        sub={isTableMode ? `${rows.length} records` : `${summary.total} active assignments`}
         back
-        onBack={() => go(S.HOME)}
+        onBack={() => isTableMode ? go(S.STAFFING) : go(S.HOME)}
         search={q}
         onSearch={setQ}
         onSearchTap={() => go(S.GLOBAL_SEARCH, { source:S.STAFFING, initialQuery:q })}
@@ -4051,59 +4245,153 @@ function StaffingScreen({ go, clients }) {
         ))}
       </div>
 
-      <div style={{ padding:"0 18px 20px" }}>
-        <div style={{ background:"#fff", border:"1px solid #e0e0e0", borderRadius:12, overflow:"hidden" }}>
-          <div style={{ overflowX:"auto", WebkitOverflowScrolling:"touch" }}>
-            <div style={{ minWidth:860 }}>
-              <div style={{ display:"grid", gridTemplateColumns:"1.6fr 1.2fr 1fr 1fr 1fr 0.8fr", background:"#f8f8f8", borderBottom:"1px solid #ececec" }}>
-                {["Client", "Workflow", "Partner", "Office", "Region", "Tax Year"].map((h) => (
-                  <div key={h} style={{ padding:"10px 10px", fontSize:10.5, fontWeight:700, color:"#4b4b4b" }}>{h}</div>
-                ))}
-              </div>
-
-              {rows.map((row, i) => (
-                <div key={row.id} style={{ display:"grid", gridTemplateColumns:"1.6fr 1.2fr 1fr 1fr 1fr 0.8fr", borderBottom:i === rows.length - 1 ? "none" : "1px solid #efefef" }}>
-                  <div style={{ padding:"10px", minWidth:0 }}>
-                    <div style={{ fontSize:12, color:"#2563eb", fontWeight:500, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{row.client}</div>
-                    <div style={{ fontSize:10, color:"#999999", marginTop:1 }}>{row.status}</div>
-                  </div>
-                  <div style={{ padding:"10px", minWidth:0 }}>
-                    <span
-                      style={{
-                        display:"inline-flex",
-                        alignItems:"center",
-                        gap:6,
-                        fontSize:10.5,
-                        fontWeight:600,
-                        color:"#4a556b",
-                        background:`${row.workflowColor}16`,
-                        border:`1px solid ${row.workflowColor}66`,
-                        borderRadius:999,
-                        padding:"3px 8px",
-                        whiteSpace:"nowrap",
-                        overflow:"hidden",
-                        textOverflow:"ellipsis",
-                        maxWidth:"100%",
-                      }}
-                    >
-                      <span style={{ width:6, height:6, borderRadius:99, background:row.workflowColor, flexShrink:0 }} />
-                      {row.workflow}
-                    </span>
-                  </div>
-                  <div style={{ padding:"10px", fontSize:11, color:"#3f3f3f", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{row.partner}</div>
-                  <div style={{ padding:"10px", fontSize:11, color:"#3f3f3f", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{row.office}</div>
-                  <div style={{ padding:"10px", fontSize:11, color:"#3f3f3f", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{row.region}</div>
-                  <div style={{ padding:"10px", fontSize:11, color:"#3f3f3f" }}>{row.taxYear}</div>
+      {!isTableMode ? (
+        <div style={{ padding:"0 18px 20px", display:"flex", flexDirection:"column", gap:10 }}>
+          <div style={{ background:"#fff", border:"1px solid #e1e3e8", borderRadius:12, padding:"12px 12px 10px" }}>
+            <div style={{ fontSize:13, fontWeight:700, color:"#1f2937", marginBottom:8 }}>Workload snapshot</div>
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(4, minmax(0, 1fr))", gap:8 }}>
+              {[
+                { label:"At risk", value:summary.atRisk, bg:"#fbefef", color:"#9f5151" },
+                { label:"Awaiting", value:summary.awaiting, bg:"#fcf6e8", color:"#94691e" },
+                { label:"In review", value:summary.review, bg:"#edf7f0", color:"#2f5f45" },
+                { label:"Avg step", value:summary.avgStep, bg:"#eef3ff", color:"#3f5177" },
+              ].map((m) => (
+                <div key={m.label} style={{ border:"1px solid #eceef3", borderRadius:10, background:m.bg, padding:"8px 6px" }}>
+                  <div style={{ fontSize:9.5, fontWeight:700, color:m.color, textTransform:"uppercase", letterSpacing:0.55 }}>{m.label}</div>
+                  <div style={{ fontSize:16, fontWeight:800, color:"#1f2937", marginTop:2 }}>{m.value}</div>
                 </div>
               ))}
             </div>
           </div>
-        </div>
 
-        <div style={{ marginTop:10, fontSize:11, color:"#777777" }}>
-          Showing {rows.length} staffing records
+          <div style={{ background:"#fff", border:"1px solid #e1e3e8", borderRadius:12, padding:"12px" }}>
+            <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:8 }}>
+              <div style={{ fontSize:13, fontWeight:700, color:"#1f2937" }}>Bottlenecks</div>
+              <div style={{ fontSize:11, color:"#7a818f" }}>Top stages</div>
+            </div>
+            <div style={{ display:"flex", flexDirection:"column", gap:7 }}>
+              {summary.stages.slice(0, 4).map((s) => (
+                <div key={s.name}>
+                  <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:3 }}>
+                    <span style={{ fontSize:11, color:"#4b5563" }}>{s.name}</span>
+                    <span style={{ fontSize:11, fontWeight:700, color:"#111827" }}>{s.count}</span>
+                  </div>
+                  <div style={{ height:6, borderRadius:99, background:"#eef1f6" }}>
+                    <div style={{ height:"100%", width:`${Math.max((s.count / summary.maxStage) * 100, 10)}%`, borderRadius:99, background:s.color }} />
+                  </div>
+                </div>
+              ))}
+              {summary.stages.length === 0 && (
+                <div style={{ fontSize:11, color:"#8a8f9a" }}>No staffing rows for this filter.</div>
+              )}
+            </div>
+          </div>
+
+          <div style={{ background:"#fff", border:"1px solid #e1e3e8", borderRadius:12, overflow:"hidden" }}>
+            <div style={{ padding:"11px 12px 9px", borderBottom:"1px solid #eceef3", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+              <div style={{ fontSize:13, fontWeight:700, color:"#1f2937" }}>Priority queue</div>
+              <div style={{ fontSize:11, color:"#7a818f" }}>Next 6 actions</div>
+            </div>
+            {summary.actions.slice(0, 6).map((a, idx) => {
+              const pill = statusPill(a.status);
+              return (
+                <button
+                  key={a.id}
+                  onClick={() => {
+                    const client = clients.find((c) => c.id === a.id);
+                    if (client) go(S.CLIENT_DETAIL, { client, from:S.STAFFING });
+                  }}
+                  style={{
+                    width:"100%",
+                    border:"none",
+                    borderBottom: idx === Math.min(summary.actions.length, 6) - 1 ? "none" : "1px solid #eceef3",
+                    background:"#fff",
+                    padding:"10px 12px",
+                    textAlign:"left",
+                    cursor:"pointer",
+                    display:"flex",
+                    alignItems:"center",
+                    gap:10,
+                  }}
+                >
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ fontSize:12.5, fontWeight:700, color:"#1f2937", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{a.client}</div>
+                    <div style={{ fontSize:11, color:"#6b7280", marginTop:1, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{a.nextAction} · {a.partner}</div>
+                  </div>
+                  <div style={{ display:"flex", flexDirection:"column", alignItems:"flex-end", gap:4, flexShrink:0 }}>
+                    <span style={{ fontSize:9.5, fontWeight:700, color:pill.c, background:pill.bg, border:`1px solid ${pill.bd}`, borderRadius:999, padding:"3px 8px" }}>{pill.label}</span>
+                    <span style={{ fontSize:10, color:"#707784" }}>Step {a.step}/{a.steps}</span>
+                  </div>
+                </button>
+              );
+            })}
+            {summary.actions.length === 0 && (
+              <div style={{ padding:"12px", fontSize:11, color:"#8a8f9a" }}>No priority actions for this filter.</div>
+            )}
+          </div>
+
+          <button
+            onClick={() => go(S.STAFFING, { mode:"table" })}
+            style={{ width:"100%", border:"1.5px solid #d8d8d8", borderRadius:12, background:"#fff", color:"#555555", fontSize:13, fontWeight:700, padding:"12px 0", cursor:"pointer" }}
+          >
+            Open full staffing table
+          </button>
         </div>
-      </div>
+      ) : (
+        <div style={{ padding:"0 18px 20px" }}>
+          <div style={{ background:"#fff", border:"1px solid #e0e0e0", borderRadius:12, overflow:"hidden" }}>
+            <div style={{ overflowX:"auto", WebkitOverflowScrolling:"touch" }}>
+              <div style={{ minWidth:860 }}>
+                <div style={{ display:"grid", gridTemplateColumns:"1.6fr 1.2fr 1fr 1fr 1fr 0.8fr", background:"#f8f8f8", borderBottom:"1px solid #ececec" }}>
+                  {["Client", "Workflow", "Partner", "Office", "Region", "Tax Year"].map((h) => (
+                    <div key={h} style={{ padding:"10px 10px", fontSize:10.5, fontWeight:700, color:"#4b4b4b" }}>{h}</div>
+                  ))}
+                </div>
+
+                {rows.map((row, i) => (
+                  <div key={row.id} style={{ display:"grid", gridTemplateColumns:"1.6fr 1.2fr 1fr 1fr 1fr 0.8fr", borderBottom:i === rows.length - 1 ? "none" : "1px solid #efefef" }}>
+                    <div style={{ padding:"10px", minWidth:0 }}>
+                      <div style={{ fontSize:12, color:"#2563eb", fontWeight:500, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{row.client}</div>
+                      <div style={{ fontSize:10, color:"#999999", marginTop:1 }}>{row.status}</div>
+                    </div>
+                    <div style={{ padding:"10px", minWidth:0 }}>
+                      <span
+                        style={{
+                          display:"inline-flex",
+                          alignItems:"center",
+                          gap:6,
+                          fontSize:10.5,
+                          fontWeight:600,
+                          color:"#4a556b",
+                          background:`${row.workflowColor}16`,
+                          border:`1px solid ${row.workflowColor}66`,
+                          borderRadius:999,
+                          padding:"3px 8px",
+                          whiteSpace:"nowrap",
+                          overflow:"hidden",
+                          textOverflow:"ellipsis",
+                          maxWidth:"100%",
+                        }}
+                      >
+                        <span style={{ width:6, height:6, borderRadius:99, background:row.workflowColor, flexShrink:0 }} />
+                        {row.workflow}
+                      </span>
+                    </div>
+                    <div style={{ padding:"10px", fontSize:11, color:"#3f3f3f", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{row.partner}</div>
+                    <div style={{ padding:"10px", fontSize:11, color:"#3f3f3f", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{row.office}</div>
+                    <div style={{ padding:"10px", fontSize:11, color:"#3f3f3f", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{row.region}</div>
+                    <div style={{ padding:"10px", fontSize:11, color:"#3f3f3f" }}>{row.taxYear}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div style={{ marginTop:10, fontSize:11, color:"#777777" }}>
+            Showing {rows.length} staffing records
+          </div>
+        </div>
+      )}
     </div>
   );
 }
