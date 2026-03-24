@@ -3,6 +3,8 @@ import { useState, useRef, useEffect } from "react";
 // ─── Constants ────────────────────────────────────────────────────
 const S = {
   HOME: "home",
+  HOME_SEARCH: "home_search",
+  GLOBAL_SEARCH: "global_search",
   CLIENTS: "clients",
   CLIENT_DETAIL: "client_detail",
   MESSAGING: "messaging",
@@ -150,13 +152,13 @@ const stepLabels = ["Sign EL","Request List","Upload Docs","Tax Organizer","Revi
 
 const buildStaffingRows = (list) => {
   const workflowByStep = [
-    "Tax · EL",
-    "Tax · Request List",
-    "Tax · Upload",
-    "Tax · Organizer",
-    "Tax · Review",
-    "Tax · Sign Return",
-    "Tax · Payments",
+    "EL",
+    "Request List",
+    "Upload",
+    "Organizer",
+    "Review",
+    "Sign Return",
+    "Payments",
   ];
   const partners = ["Ken Yoder", "Sarah Kleinfelter", "Alex Reed", "Maya Patel"];
   const offices = ["Chicago", "Detroit", "Denver", "Charlotte"];
@@ -238,14 +240,49 @@ const Btn = ({ label, color=UI.brand, textColor="#fff", outline, onClick, full, 
 );
 
 // ─── Header ───────────────────────────────────────────────────────
+const HeaderBellIcon = ({ size=14, color="#fff" }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <path d="M7.8 9.2a4.2 4.2 0 0 1 8.4 0V12c0 1.5.5 2.8 1.5 3.8l.6.6H5.7l.6-.6c1-1 1.5-2.3 1.5-3.8V9.2Z" />
+    <path d="M10.2 18.2a2 2 0 0 0 3.6 0" />
+  </svg>
+);
+
+const HeaderUserIcon = ({ size=14, color="#fff" }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <circle cx="12" cy="8" r="3.2" />
+    <path d="M5.2 19.2c0-3.4 3-5.6 6.8-5.6s6.8 2.2 6.8 5.6" />
+  </svg>
+);
+
+const HeaderIconButton = ({ onClick, children }) => (
+  <button
+    onClick={onClick}
+    style={{
+      border:"none",
+      background:"rgba(255,255,255,0.16)",
+      width:28,
+      height:28,
+      borderRadius:99,
+      cursor:"pointer",
+      color:"#fff",
+      display:"flex",
+      alignItems:"center",
+      justifyContent:"center",
+      padding:0,
+    }}
+  >
+    {children}
+  </button>
+);
+
 const HeaderIcons = () => (
   <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-    <button style={{ border:"none", background:"rgba(255,255,255,0.16)", width:28, height:28, borderRadius:99, cursor:"pointer", color:"#fff", fontSize:13, display:"flex", alignItems:"center", justifyContent:"center", padding:0 }}>🔔</button>
-    <button style={{ border:"none", background:"rgba(255,255,255,0.16)", width:28, height:28, borderRadius:99, cursor:"pointer", color:"#fff", fontSize:14, display:"flex", alignItems:"center", justifyContent:"center", padding:0 }}>⚙</button>
+    <HeaderIconButton><HeaderBellIcon /></HeaderIconButton>
+    <HeaderIconButton><HeaderUserIcon /></HeaderIconButton>
   </div>
 );
 
-const Header = ({ title, sub, back, onBack, right, search, onSearch, searchPh }) => (
+const Header = ({ title, sub, back, onBack, right, search, onSearch, onSearchTap, searchPh }) => (
   <div style={{ background:UI.brand, flexShrink:0, paddingBottom: search !== undefined ? 14 : 0 }}>
     <div style={{ padding:"12px 18px 10px", display:"flex", alignItems:"center", gap:10 }}>
       {back && (
@@ -261,10 +298,20 @@ const Header = ({ title, sub, back, onBack, right, search, onSearch, searchPh })
       </div>
     </div>
     {search !== undefined && (
-      <div style={{ margin:"0 18px", background:"#fff", borderRadius:10, border:"1px solid rgba(255,255,255,0.35)", display:"flex", alignItems:"center", padding:"8px 12px", gap:7 }}>
-        <span style={{ color: UI.muted, fontSize:12 }}>🔍</span>
-        <input value={search} onChange={e => onSearch(e.target.value)} placeholder={searchPh||"Search..."} style={{ background:"none", border:"none", outline:"none", color: UI.text, fontSize:13, flex:1 }} />
-      </div>
+      onSearchTap ? (
+        <button
+          onClick={onSearchTap}
+          style={{ width:"calc(100% - 36px)", margin:"0 18px", background:"#fff", borderRadius:10, border:"1px solid rgba(255,255,255,0.35)", display:"flex", alignItems:"center", padding:"8px 12px", gap:7, cursor:"pointer", textAlign:"left" }}
+        >
+          <span style={{ color: UI.muted, fontSize:12 }}>🔍</span>
+          <span style={{ color: search ? UI.text : UI.muted, fontSize:13, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{search || (searchPh||"Search...")}</span>
+        </button>
+      ) : (
+        <div style={{ margin:"0 18px", background:"#fff", borderRadius:10, border:"1px solid rgba(255,255,255,0.35)", display:"flex", alignItems:"center", padding:"8px 12px", gap:7 }}>
+          <span style={{ color: UI.muted, fontSize:12 }}>🔍</span>
+          <input value={search} onChange={e => onSearch(e.target.value)} placeholder={searchPh||"Search..."} style={{ background:"none", border:"none", outline:"none", color: UI.text, fontSize:13, flex:1 }} />
+        </div>
+      )
     )}
   </div>
 );
@@ -381,8 +428,16 @@ export default function App() {
   });
   const [chatUnread, setChatUnread] = useState(Object.fromEntries(chats.map(c => [c.id, c.unread])));
   const [toast, setToast] = useState(null);
-
   const [pendingResolve, setPendingResolve] = useState([]);
+  const scrollRef = useRef(null);
+  const pullStartYRef = useRef(null);
+  const pullDistanceRef = useRef(0);
+  const [pullDistance, setPullDistance] = useState(0);
+  const [homeSearch, setHomeSearch] = useState("");
+  const [homeScrollTop, setHomeScrollTop] = useState(0);
+  const [pullRefreshing, setPullRefreshing] = useState(false);
+  const mousePullActiveRef = useRef(false);
+  const PULL_REFRESH_THRESHOLD = 90;
 
   const totalUnread = Object.values(chatUnread).reduce((a,b) => a+b, 0);
 
@@ -433,8 +488,95 @@ export default function App() {
     setChatUnread(p => ({ ...p, [chat.id]: 0 }));
   };
   const openTopic = (chat, topic) => { go(S.CHAT, { chat, topic }); };
+  const isHomePullEnabled = screen === S.HOME && !overlayOpen;
+  const isInteractiveTarget = (target) => !!target?.closest?.("button,input,textarea,select,a,label");
+  const handleScroll = (e) => {
+    if (screen !== S.HOME) return;
+    setHomeScrollTop(e.currentTarget.scrollTop || 0);
+  };
 
-  const screenProps = { go, goTab, clients, signatures, forms8879, extensions, chats, docs, auditLog, signed, reminded, remind, undoRemind, sign, chatMsgs, chatUnread, openChat, openTopic, sendMsg, ctx, pendingResolve, resolveOnReturn, clearPendingResolve, showToast, hideToast, setOverlayOpen };
+  const handlePullStart = (e) => {
+    if (!isHomePullEnabled || pullRefreshing) return;
+    const scroller = scrollRef.current;
+    if (!scroller || scroller.scrollTop > 0) return;
+    pullStartYRef.current = e.touches[0].clientY;
+    pullDistanceRef.current = 0;
+  };
+
+  const handlePullMove = (e) => {
+    if (pullStartYRef.current == null || !isHomePullEnabled || pullRefreshing) return;
+    const scroller = scrollRef.current;
+    if (!scroller || scroller.scrollTop > 0) return;
+    const dy = e.touches[0].clientY - pullStartYRef.current;
+    if (dy <= 0) {
+      pullDistanceRef.current = 0;
+      setPullDistance(0);
+      return;
+    }
+    const nextDistance = Math.min(140, dy * 0.55);
+    pullDistanceRef.current = nextDistance;
+    setPullDistance(nextDistance);
+    if (nextDistance > 0) e.preventDefault();
+  };
+
+  const handlePullEnd = () => {
+    if (pullStartYRef.current == null) return;
+    pullStartYRef.current = null;
+    const distance = pullDistanceRef.current;
+    pullDistanceRef.current = 0;
+    if (distance >= PULL_REFRESH_THRESHOLD && !pullRefreshing) {
+      setPullRefreshing(true);
+      setTimeout(() => {
+        setPullRefreshing(false);
+        showToast("Home refreshed ✓");
+      }, 900);
+    }
+    setPullDistance(0);
+  };
+
+  const handleMousePullStart = (e) => {
+    if (e.button !== 0 || !isHomePullEnabled || pullRefreshing) return;
+    if (isInteractiveTarget(e.target)) return;
+    const scroller = scrollRef.current;
+    if (!scroller || scroller.scrollTop > 0) return;
+    pullStartYRef.current = e.clientY;
+    pullDistanceRef.current = 0;
+    mousePullActiveRef.current = true;
+  };
+
+  const handleMousePullMove = (e) => {
+    if (!mousePullActiveRef.current || pullStartYRef.current == null || !isHomePullEnabled || pullRefreshing) return;
+    const scroller = scrollRef.current;
+    if (!scroller || scroller.scrollTop > 0) return;
+    const dy = e.clientY - pullStartYRef.current;
+    if (dy <= 0) {
+      pullDistanceRef.current = 0;
+      setPullDistance(0);
+      return;
+    }
+    const nextDistance = Math.min(140, dy * 0.55);
+    pullDistanceRef.current = nextDistance;
+    setPullDistance(nextDistance);
+    if (nextDistance > 0) e.preventDefault();
+  };
+
+  const handleMousePullEnd = () => {
+    if (!mousePullActiveRef.current && pullStartYRef.current == null) return;
+    mousePullActiveRef.current = false;
+    handlePullEnd();
+  };
+
+  useEffect(() => {
+    if (screen !== S.HOME) {
+      pullStartYRef.current = null;
+      pullDistanceRef.current = 0;
+      mousePullActiveRef.current = false;
+      setPullDistance(0);
+      setHomeScrollTop(0);
+    }
+  }, [screen]);
+
+  const screenProps = { go, goTab, clients, signatures, forms8879, extensions, chats, docs, auditLog, signed, reminded, remind, undoRemind, sign, chatMsgs, chatUnread, openChat, openTopic, sendMsg, ctx, pendingResolve, resolveOnReturn, clearPendingResolve, showToast, hideToast, setOverlayOpen, homeSearch, setHomeSearch };
 
   return (
     <div style={{ minHeight:"100vh", background:"#c0c0c0", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"'Segoe UI',system-ui,sans-serif" }}>
@@ -453,8 +595,32 @@ export default function App() {
         </div>
 
         {/* Screen */}
-        <div style={{ flex:1, overflowY:"auto", display:"flex", flexDirection:"column", paddingBottom: [S.HOME, S.CLIENTS, S.MESSAGING, S.DOCUMENTS].includes(screen) ? 80 : 0 }}>
-          {screen === S.HOME              && <HomeScreen        {...screenProps} />}
+        <div
+          ref={scrollRef}
+          onScroll={handleScroll}
+          onTouchStart={handlePullStart}
+          onTouchMove={handlePullMove}
+          onTouchEnd={handlePullEnd}
+          onTouchCancel={handlePullEnd}
+          onMouseDown={handleMousePullStart}
+          onMouseMove={handleMousePullMove}
+          onMouseUp={handleMousePullEnd}
+          onMouseLeave={handleMousePullEnd}
+          style={{
+            flex:1,
+            overflowY:"auto",
+            display:"flex",
+            flexDirection:"column",
+            paddingBottom: [S.HOME, S.CLIENTS, S.MESSAGING, S.DOCUMENTS].includes(screen) ? 80 : 0,
+            userSelect: pullDistance > 0 ? "none" : "auto",
+            cursor: isHomePullEnabled ? "grab" : "auto",
+            transform: screen === S.HOME ? `translateY(${Math.min(pullDistance * 0.85, 56)}px)` : "translateY(0)",
+            transition: pullDistance === 0 ? "transform 0.18s ease" : "none",
+          }}
+        >
+          {screen === S.HOME              && <HomeScreen        {...screenProps} showScrollSearch={homeScrollTop > 12} />}
+          {screen === S.HOME_SEARCH       && <HomeSearchScreen  {...screenProps} />}
+          {screen === S.GLOBAL_SEARCH     && <GlobalSearchScreen {...screenProps} />}
           {screen === S.CLIENTS           && <ClientsScreen     {...screenProps} />}
           {screen === S.CLIENT_DETAIL     && <ClientDetailScreen {...screenProps} chats={chats} />}
           {screen === S.MESSAGING         && <MessagingScreen   {...screenProps} />}
@@ -503,6 +669,63 @@ export default function App() {
           </div>
         )}
 
+        {screen === S.HOME && !overlayOpen && (pullDistance > 0 || pullRefreshing) && (
+          <div
+            style={{
+              position:"absolute",
+              top:42,
+              left:0,
+              right:0,
+              display:"flex",
+              justifyContent:"center",
+              pointerEvents:"none",
+              zIndex:95,
+              transform:`translateY(${Math.min(pullDistance * 0.6, 40)}px)`,
+            }}
+          >
+            <div style={{ display:"inline-flex", alignItems:"center", gap:8, background:"rgba(7,33,79,0.86)", color:"#d8e5ff", border:"1px solid rgba(151,177,255,0.34)", borderRadius:999, padding:"5px 10px", fontSize:10.5, fontWeight:600 }}>
+              {pullRefreshing && (
+                <span style={{ width:10, height:10, borderRadius:99, border:"1.7px solid rgba(216,229,255,0.35)", borderTopColor:"#d8e5ff", display:"inline-block", animation:"spin 1s linear infinite" }} />
+              )}
+              <span>
+                {pullRefreshing
+                  ? "Refreshing..."
+                  : pullDistance >= PULL_REFRESH_THRESHOLD
+                    ? "Release to refresh"
+                    : "Pull down to refresh"}
+              </span>
+            </div>
+          </div>
+        )}
+
+        {[S.HOME, S.CLIENTS, S.MESSAGING, S.DOCUMENTS, S.STAFFING].includes(screen) && !overlayOpen && (
+          <button
+            onClick={() => go(S.EL_WIZARD)}
+            aria-label="Add"
+            style={{
+              position:"absolute",
+              right:18,
+              bottom:[S.HOME, S.CLIENTS, S.MESSAGING, S.DOCUMENTS].includes(screen) ? 88 : 20,
+              width:52,
+              height:52,
+              borderRadius:99,
+              border:"none",
+              background:"#0065FF",
+              color:"#fff",
+              boxShadow:"0 10px 24px rgba(0,101,255,0.35)",
+              display:"flex",
+              alignItems:"center",
+              justifyContent:"center",
+              cursor:"pointer",
+              zIndex:90,
+            }}
+          >
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+              <path d="M12 5v14M5 12h14" />
+            </svg>
+          </button>
+        )}
+
         {/* Nav — only on top-level tab screens */}
         {[S.HOME, S.CLIENTS, S.MESSAGING, S.DOCUMENTS].includes(screen) && !overlayOpen && (
           <BottomNav tab={tab} setTab={goTab} totalUnread={totalUnread} />
@@ -512,10 +735,230 @@ export default function App() {
   );
 }
 
+function HomeSearchScreen({ go, clients, homeSearch, setHomeSearch }) {
+  const inputRef = useRef(null);
+  useEffect(() => { inputRef.current?.focus(); }, []);
+  const q = homeSearch.trim().toLowerCase();
+  const results = clients
+    .filter((c) =>
+      !q || [c.name, c.type, c.stepLabel, c.company || "", ...(c.workspaces || [])]
+        .join(" ")
+        .toLowerCase()
+        .includes(q)
+    )
+    .slice(0, 5);
+
+  return (
+    <div style={{ flex:1, display:"flex", flexDirection:"column", background:"#fff" }}>
+      <div style={{ background:UI.brand, padding:"12px 18px 14px" }}>
+        <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+          <button
+            onClick={() => go(S.HOME)}
+            style={{ border:"none", background:"rgba(255,255,255,0.18)", width:30, height:30, borderRadius:99, cursor:"pointer", color:"#fff", fontSize:18, display:"flex", alignItems:"center", justifyContent:"center", padding:0 }}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <path d="M15 18l-6-6 6-6" />
+            </svg>
+          </button>
+          <div style={{ flex:1, background:"#fff", borderRadius:10, border:"1px solid rgba(255,255,255,0.35)", display:"flex", alignItems:"center", padding:"8px 10px", gap:7 }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <circle cx="11" cy="11" r="7" />
+              <path d="M20 20l-3.5-3.5" />
+            </svg>
+            <input
+              ref={inputRef}
+              value={homeSearch}
+              onChange={(e) => setHomeSearch(e.target.value)}
+              placeholder="Search home queue..."
+              style={{ flex:1, border:"none", outline:"none", background:"transparent", color:"#111827", fontSize:13 }}
+            />
+          </div>
+          <button
+            onClick={() => { setHomeSearch(""); go(S.HOME); }}
+            style={{ border:"none", background:"rgba(255,255,255,0.18)", width:30, height:30, borderRadius:99, cursor:"pointer", color:"#fff", fontSize:14, display:"flex", alignItems:"center", justifyContent:"center", padding:0 }}
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden>
+              <path d="M6 6l12 12M18 6l-12 12" />
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <div style={{ flex:1, overflowY:"auto", padding:"10px 18px 18px" }}>
+        <div style={{ fontSize:12, fontWeight:700, color:"#4b5563", marginBottom:8 }}>Recent searches</div>
+        <div style={{ fontSize:11, color:"#8a8a8a", marginBottom:8 }}>{results.length} result{results.length === 1 ? "" : "s"}</div>
+        {results.map((c) => (
+          <button
+            key={c.id}
+            onClick={() => go(S.CLIENT_DETAIL, { client:c, from:S.HOME })}
+            style={{ width:"100%", border:"none", borderBottom:"1px solid #eceef3", background:"transparent", padding:"10px 2px", display:"flex", alignItems:"center", gap:10, textAlign:"left", cursor:"pointer" }}
+          >
+            <div style={{ width:32, height:32, borderRadius:99, background:"#eef3ff", color:"#2f5d9f", display:"flex", alignItems:"center", justifyContent:"center", fontWeight:700, fontSize:13, flexShrink:0 }}>
+              {c.name[0]}
+            </div>
+            <div style={{ minWidth:0 }}>
+              <div style={{ fontSize:13, fontWeight:700, color:"#1a1a1a", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{c.name}</div>
+              <div style={{ fontSize:11, color:"#777777", marginTop:2, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{c.stepLabel} · Step {c.step}/{c.steps}</div>
+            </div>
+          </button>
+        ))}
+        {results.length === 0 && (
+          <div style={{ fontSize:12, color:"#8a8a8a", textAlign:"center", padding:"16px 0" }}>No results</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function GlobalSearchScreen({ go, ctx, clients, chats, docs }) {
+  const source = ctx?.source || S.CLIENTS;
+  const [q, setQ] = useState(ctx?.initialQuery || "");
+  const inputRef = useRef(null);
+
+  useEffect(() => {
+    setQ(ctx?.initialQuery || "");
+    setTimeout(() => inputRef.current?.focus(), 0);
+  }, [source, ctx?.initialQuery]);
+
+  const sourceConfig = {
+    [S.CLIENTS]: { title:"Recent searches", ph:"Search clients or workspaces..." },
+    [S.MESSAGING]: { title:"Search messages", ph:"Search conversations..." },
+    [S.DOCUMENTS]: { title:"Search documents", ph:"Search files..." },
+    [S.STAFFING]: { title:"Search staffing", ph:"Search client, workflow, partner..." },
+  };
+  const cfg = sourceConfig[source] || sourceConfig[S.CLIENTS];
+  const query = q.trim().toLowerCase();
+
+  let results = [];
+  if (source === S.CLIENTS) {
+    results = clients
+      .filter((c) =>
+        !query || [c.name, c.type, c.stepLabel, c.company || "", ...(c.workspaces || [])]
+          .join(" ")
+          .toLowerCase()
+          .includes(query)
+      )
+      .map((c) => ({
+        id: `c-${c.id}`,
+        title: c.name,
+        sub: `${c.stepLabel} · Step ${c.step}/${c.steps}`,
+        onClick: () => go(S.CLIENT_DETAIL, { client:c, from:S.CLIENTS }),
+        avatar: c.name[0],
+      }))
+      .slice(0, 5);
+  } else if (source === S.MESSAGING) {
+    results = chats
+      .filter((chat) => {
+        const hay = [chat.name, chat.last, ...(chat.topics || []).map((t) => `${t.label} ${t.lastMsg || ""}`)]
+          .join(" ")
+          .toLowerCase();
+        return !query || hay.includes(query);
+      })
+      .map((chat) => ({
+        id: `m-${chat.id}`,
+        title: chat.name,
+        sub: chat.last,
+        onClick: () => {
+          if (chat.topics?.length > 1) go(S.CHAT_TOPICS, { chat });
+          else go(S.CHAT, { chat, topic: chat.topics?.[0] });
+        },
+        avatar: chat.name[0],
+      }));
+  } else if (source === S.DOCUMENTS) {
+    results = docs
+      .filter((d) => !query || `${d.name} ${d.client}`.toLowerCase().includes(query))
+      .map((d) => ({
+        id: `d-${d.id}`,
+        title: d.name,
+        sub: `${d.client} · ${d.date}`,
+        onClick: () => go(S.DMS_FILE, { file:d }),
+        avatar: d.ext?.slice(0, 3)?.toUpperCase() || "DOC",
+      }));
+  } else if (source === S.STAFFING) {
+    results = buildStaffingRows(clients)
+      .filter((r) => !query || [r.client, r.workflow, r.partner, r.office, r.region, r.status].join(" ").toLowerCase().includes(query))
+      .map((r) => {
+        const c = clients.find((x) => x.id === r.id);
+        return {
+          id: `s-${r.id}`,
+          title: r.client,
+          sub: `${r.workflow} · ${r.partner} · ${r.office}`,
+          onClick: () => c ? go(S.CLIENT_DETAIL, { client:c, from:S.STAFFING }) : go(S.STAFFING),
+          avatar: r.client[0],
+        };
+      });
+  }
+
+  const isClientSearch = source === S.CLIENTS;
+
+  return (
+    <div style={{ flex:1, display:"flex", flexDirection:"column", background:"#fff" }}>
+      <div style={{ background:UI.brand, padding:"12px 18px 14px" }}>
+        <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+          <button
+            onClick={() => go(source)}
+            style={{ border:"none", background:"rgba(255,255,255,0.18)", width:30, height:30, borderRadius:99, cursor:"pointer", color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", padding:0 }}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <path d="M15 18l-6-6 6-6" />
+            </svg>
+          </button>
+          <div style={{ flex:1, background:"#fff", borderRadius:10, border:"1px solid rgba(255,255,255,0.35)", display:"flex", alignItems:"center", padding:"8px 10px", gap:7 }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <circle cx="11" cy="11" r="7" />
+              <path d="M20 20l-3.5-3.5" />
+            </svg>
+            <input
+              ref={inputRef}
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder={cfg.ph}
+              style={{ flex:1, border:"none", outline:"none", background:"transparent", color:"#111827", fontSize:13 }}
+            />
+          </div>
+          <button
+            onClick={() => go(source)}
+            style={{ border:"none", background:"rgba(255,255,255,0.18)", width:30, height:30, borderRadius:99, cursor:"pointer", color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", padding:0 }}
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden>
+              <path d="M6 6l12 12M18 6l-12 12" />
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <div style={{ flex:1, overflowY:"auto", padding:"10px 18px 18px" }}>
+        <div style={{ fontSize:12, fontWeight:700, color:"#4b5563", marginBottom:8 }}>{cfg.title}</div>
+        <div style={{ fontSize:11, color:"#8a8a8a", marginBottom:8 }}>{results.length} result{results.length === 1 ? "" : "s"}</div>
+        {results.map((r) => (
+          <button
+            key={r.id}
+            onClick={r.onClick}
+            style={isClientSearch
+              ? { width:"100%", border:"none", borderBottom:"1px solid #eceef3", background:"transparent", padding:"10px 2px", display:"flex", alignItems:"center", gap:10, textAlign:"left", cursor:"pointer" }
+              : { width:"100%", border:"1px solid #e5e7eb", background:"#fff", borderRadius:12, padding:"10px 12px", display:"flex", alignItems:"center", gap:10, textAlign:"left", marginBottom:8, cursor:"pointer" }}
+          >
+            <div style={{ width:32, height:32, borderRadius:99, background:"#eef3ff", color:"#2f5d9f", display:"flex", alignItems:"center", justifyContent:"center", fontWeight:700, fontSize:12, flexShrink:0 }}>
+              {r.avatar}
+            </div>
+            <div style={{ minWidth:0, flex:1 }}>
+              <div style={{ fontSize:13, fontWeight:700, color:"#1a1a1a", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{r.title}</div>
+              <div style={{ fontSize:11, color:"#777777", marginTop:2, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{r.sub}</div>
+            </div>
+          </button>
+        ))}
+        {results.length === 0 && (
+          <div style={{ fontSize:12, color:"#8a8a8a", textAlign:"center", padding:"16px 0" }}>No results</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ══════════════════════════════════════════════════════════════════
 // HOME SCREEN
 // ══════════════════════════════════════════════════════════════════
-function HomeScreen({ go, clients, signatures, forms8879, extensions, reminded, remind, undoRemind, showToast, hideToast, setOverlayOpen, signed }) {
+function HomeScreen({ go, clients, signatures, forms8879, extensions, reminded, remind, undoRemind, showToast, hideToast, setOverlayOpen, signed, homeSearch, showScrollSearch }) {
   const [workScope, setWorkScope] = useState("my"); // "my" | "all" | "favorites"
   const [selectedClientId, setSelectedClientId] = useState(null);
   const [workScopeSheetOpen, setWorkScopeSheetOpen] = useState(false);
@@ -543,9 +986,18 @@ function HomeScreen({ go, clients, signatures, forms8879, extensions, reminded, 
       : workScope === "favorites"
         ? clients.filter((c) => favoriteClientIds.includes(c.id))
         : clients;
-  const scopedClients = selectedClientId
+  const scopedClientsBase = selectedClientId
     ? baseScopedClients.filter((c) => c.id === selectedClientId)
     : baseScopedClients;
+  const searchQuery = homeSearch.trim().toLowerCase();
+  const scopedClients = searchQuery
+    ? scopedClientsBase.filter((c) =>
+        [c.name, c.type, c.stepLabel, c.company || "", ...(c.workspaces || [])]
+          .join(" ")
+          .toLowerCase()
+          .includes(searchQuery)
+      )
+    : scopedClientsBase;
   const scopedClientNames = new Set(scopedClients.map((c) => c.name));
   const scopedSignatures = signatures.filter((s) => scopedClientNames.has(s.client));
   const scopedForms8879 = forms8879.filter((f) => scopedClientNames.has(f.client));
@@ -799,7 +1251,7 @@ function HomeScreen({ go, clients, signatures, forms8879, extensions, reminded, 
     const critical = formFailed + extRejected;
     return { ...c, signPending: signPending + formPending, blockers, critical };
   });
-  const currentScopeKey = `${workScope}:${selectedClientId || "all"}`;
+  const currentScopeKey = `${workScope}:${selectedClientId || "all"}:${searchQuery || "none"}`;
 
   const allCards = buildFocusCards();
   const cardMap = Object.fromEntries(allCards.map(c => [c.key, c]));
@@ -843,7 +1295,8 @@ function HomeScreen({ go, clients, signatures, forms8879, extensions, reminded, 
       ? "My clients"
       : workScope === "all"
         ? "All work"
-        : "Favorites";
+        : "Recent clients";
+  const showPullSearch = showScrollSearch || !!homeSearch.trim();
 
   const radioControl = (isActive) => (
     <span
@@ -890,9 +1343,24 @@ function HomeScreen({ go, clients, signatures, forms8879, extensions, reminded, 
             <span style={{ fontSize:13, color:"#cfcfcf", lineHeight:1 }}>▾</span>
           </button>
           <div style={{ display:"flex", alignItems:"center", gap:8, flexShrink:0 }}>
-            <button style={{ border:"none", background:"rgba(255,255,255,0.16)", width:28, height:28, borderRadius:99, cursor:"pointer", color:"#fff", fontSize:13, display:"flex", alignItems:"center", justifyContent:"center", padding:0 }}>🔔</button>
-            <button onClick={() => go(S.SETTINGS)} style={{ border:"none", background:"rgba(255,255,255,0.16)", width:28, height:28, borderRadius:99, cursor:"pointer", color:"#fff", fontSize:14, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, padding:0 }}>⚙</button>
+            <HeaderIconButton><HeaderBellIcon /></HeaderIconButton>
+            <HeaderIconButton onClick={() => go(S.SETTINGS)}><HeaderUserIcon /></HeaderIconButton>
           </div>
+        </div>
+
+        <div style={{ marginTop:10, maxHeight: showPullSearch ? 42 : 0, opacity: showPullSearch ? 1 : 0, overflow:"hidden", transition:"max-height 0.18s ease, opacity 0.18s ease" }}>
+          <button
+            onClick={() => go(S.HOME_SEARCH)}
+            style={{ width:"100%", display:"flex", alignItems:"center", gap:7, background:"rgba(255,255,255,0.14)", border:"1px solid rgba(173,196,255,0.35)", borderRadius:10, padding:"7px 10px", cursor:"pointer", textAlign:"left" }}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#d8e5ff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <circle cx="11" cy="11" r="7" />
+              <path d="M20 20l-3.5-3.5" />
+            </svg>
+            <span style={{ flex:1, color:"#d8e5ff", fontSize:12.5, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
+              {homeSearch.trim() || "Search home queue..."}
+            </span>
+          </button>
         </div>
 
         <div style={{ padding:"0 0 0" }}>
@@ -1096,45 +1564,95 @@ function HomeScreen({ go, clients, signatures, forms8879, extensions, reminded, 
             <div style={{ marginTop:20 }}>
               <div style={{ fontSize:14, fontWeight:700, color:"#666666", letterSpacing:0.4, marginBottom:8 }}>Return Pipeline</div>
               <div style={{ background:"#fff", border:"1px solid #e0e0e0", borderRadius:14, padding:"14px 12px 14px" }}>
-                <div style={{ marginBottom:14 }}>
-                  <div style={{ fontSize:15, fontWeight:800, color: onTrack ? "#2f6f3e" : "#8f3b3b", marginBottom:5 }}>
+                <div style={{ marginBottom:8 }}>
+                  <div style={onTrack ? {
+                    fontSize:15,
+                    fontWeight:700,
+                    color:"#255ba8",
+                    marginBottom:6,
+                  } : {
+                    fontSize:15,
+                    fontWeight:700,
+                    marginBottom:6,
+                    background:"linear-gradient(90deg, #d67c2a 0%, #e39a3a 55%, #c75f2c 100%)",
+                    WebkitBackgroundClip:"text",
+                    backgroundClip:"text",
+                    color:"transparent",
+                    WebkitTextFillColor:"transparent",
+                  }}>
                     {onTrack ? "You're on track" : "You're slightly behind"}
                   </div>
                   <div style={{ fontSize:10.5, color:"#7f7f7f" }}>
-                    Target step now: <strong style={{ color:"#555555", fontWeight:700 }}>{shortLabels[targetStep - 1]}</strong> · Clients currently average at step {currentAvgStep.toFixed(1)}
+                    Clients currently average at step {currentAvgStep.toFixed(1)}
                   </div>
                 </div>
-                <div style={{ display:"flex", gap:0, alignItems:"flex-end", height:114 }}>
+                <div style={{ position:"relative", marginTop:0 }}>
+                  <div style={{ display:"flex", gap:0, alignItems:"flex-end", height:120, position:"relative", zIndex:1 }}>
                   {stageCounts.map((count, i) => {
                     const h = count === 0 ? 36 : Math.max(36, Math.round((count / maxCount) * 100));
                     const isTarget = i + 1 === targetStep;
                     return (
-                      <div key={i} style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", gap:3, padding:"0 3px" }}>
+                      <div key={i} style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", gap:4, padding:"0 3px", position:"relative" }}>
                         <div
                           style={{
                             width:"100%",
-                            borderRadius:9,
-                            background: isTarget ? "#e8f0ff" : (count>0?"#e8e8e8":"#f4f4f4"),
-                            border: isTarget ? "1.5px solid #b9d1ff" : "1.5px solid transparent",
+                            borderRadius:10,
+                            background: isTarget
+                              ? "linear-gradient(180deg, #e39a3a 0%, #c75f2c 100%)"
+                              : (count>0 ? "linear-gradient(180deg, #eceff8 0%, #e4e8f3 100%)" : "#f4f5f8"),
+                            border: isTarget ? "1px solid #d78b45" : "1px solid rgba(116,132,166,0.14)",
                             display:"flex",
                             alignItems:"center",
                             justifyContent:"center",
                             height:h,
                             position:"relative",
                             transition:"height 0.3s",
+                            boxShadow: isTarget ? "0 8px 18px rgba(199,95,44,0.25)" : "none",
                           }}
                         >
                           {isTarget && (
-                            <span style={{ position:"absolute", top:-24, left:"50%", transform:"translateX(-50%)", fontSize:8, fontWeight:700, color:"#3b68b0", letterSpacing:0.3 }}>
-                              Target
-                            </span>
+                            <div
+                              style={{
+                                position:"absolute",
+                                inset:0,
+                                borderRadius:10,
+                                background:"repeating-linear-gradient(135deg, rgba(255,255,255,0.2) 0 6px, rgba(255,255,255,0) 6px 12px)",
+                              }}
+                            />
                           )}
-                          <span style={{ fontSize: count>9?12:14, fontWeight:700, color: count>0?"#1a1a1a":"#d0d0d0" }}>{count}</span>
+                          {isTarget && (
+                            <>
+                              <span
+                                style={{
+                                  position:"absolute",
+                                  top:-48,
+                                  left:"50%",
+                                  transform:"translateX(-50%)",
+                                  fontSize:9,
+                                  fontWeight:700,
+                                  color:"#b76624",
+                                  background:"#ffffff",
+                                  border:"1px solid #f0d7be",
+                                  borderRadius:8,
+                                  padding:"3px 8px",
+                                  whiteSpace:"nowrap",
+                                  boxShadow:"0 4px 10px rgba(199,95,44,0.18)",
+                                  zIndex:2,
+                                }}
+                              >
+                                Target · {count}
+                              </span>
+                              <span style={{ position:"absolute", top:-19, left:"50%", width:1, height:16, background:"#dfa66f" }} />
+                              <span style={{ position:"absolute", top:-23, left:"50%", transform:"translateX(-50%)", width:8, height:8, borderRadius:99, background:"#cf7a31", border:"2px solid #fff" }} />
+                            </>
+                          )}
+                          <span style={{ position:"relative", zIndex:1, fontSize: count>9?12:14, fontWeight:700, color: isTarget ? "#fff" : count>0?"#1a1a1a":"#d0d0d0" }}>{count}</span>
                         </div>
                         <span style={{ fontSize:8.5, color:"#777777", textAlign:"center", lineHeight:1.2, fontWeight:500, whiteSpace:"nowrap" }}>{shortLabels[i]}</span>
                       </div>
                     );
                   })}
+                </div>
                 </div>
                 <button
                   onClick={() => go(S.CLIENTS)}
@@ -1394,10 +1912,27 @@ function HomeScreen({ go, clients, signatures, forms8879, extensions, reminded, 
                           <div style={{ fontSize:11, color:"#2563eb", fontWeight:600, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{row.client}</div>
                         </div>
                         <div style={{ padding:"11px 12px", minWidth:0 }}>
-                          <div style={{ display:"flex", alignItems:"center", gap:5, minWidth:0 }}>
-                            <div style={{ width:3, height:14, borderRadius:99, background:row.workflowColor, flexShrink:0 }} />
-                            <span style={{ fontSize:10.5, color:"#3f3f3f", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{row.workflow}</span>
-                          </div>
+                          <span
+                            style={{
+                              display:"inline-flex",
+                              alignItems:"center",
+                              gap:5,
+                              minWidth:0,
+                              fontSize:10,
+                              fontWeight:600,
+                              color:"#4a556b",
+                              background:`${row.workflowColor}16`,
+                              border:`1px solid ${row.workflowColor}66`,
+                              borderRadius:999,
+                              padding:"3px 8px",
+                              whiteSpace:"nowrap",
+                              overflow:"hidden",
+                              textOverflow:"ellipsis",
+                            }}
+                          >
+                            <span style={{ width:6, height:6, borderRadius:99, background:row.workflowColor, flexShrink:0 }} />
+                            {row.workflow}
+                          </span>
                         </div>
                         <div style={{ padding:"11px 12px", minWidth:0 }}>
                           <div style={{ fontSize:10.5, color:"#3f3f3f", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{row.partner}</div>
@@ -1463,7 +1998,7 @@ function HomeScreen({ go, clients, signatures, forms8879, extensions, reminded, 
               {[
                 { id:"my", label:"My clients", desc:"Clients assigned to me", subItems: myClients },
                 { id:"all", label:"All work", desc:"Team-wide queue and workload" },
-                { id:"favorites", label:"Favorites", desc:"Pinned clients and priority items" },
+                { id:"favorites", label:"Recent clients", desc:"Recently viewed clients" },
               ].map((opt) => {
                 const activeScope = workScope === opt.id && selectedClientId == null;
                 const hasSubItems = !!opt.subItems?.length;
@@ -1935,28 +2470,59 @@ function HomeScreen({ go, clients, signatures, forms8879, extensions, reminded, 
 // ══════════════════════════════════════════════════════════════════
 function ClientsScreen({ go, clients, reminded, remind }) {
   const [q, setQ]       = useState("");
-  const [f, setF]       = useState("All");
+  const [f, setF]       = useState("Recent");
   const [view, setView] = useState("client"); // "client" | "workspace"
+  const myClientIds = [1,2,3,4,5,6,7,8];
+  const recentClientIds = [1,3,6];
 
-  const filtered = clients.filter(c => {
-    const ms = c.name.toLowerCase().includes(q.toLowerCase()) ||
-               (c.company||"").toLowerCase().includes(q.toLowerCase()) ||
-               c.workspaces.some(w => w.toLowerCase().includes(q.toLowerCase()));
-    const mf = f==="All" ? true : f==="Favorites" ? [1,3,6].includes(c.id) : c.urgent;
-    return ms && mf;
-  });
+  const filtered = clients
+    .filter(c => {
+      const ms = c.name.toLowerCase().includes(q.toLowerCase()) ||
+                 (c.company||"").toLowerCase().includes(q.toLowerCase()) ||
+                 c.workspaces.some(w => w.toLowerCase().includes(q.toLowerCase()));
+      const mf = f==="All" ? true : f==="Recent" ? recentClientIds.includes(c.id) : myClientIds.includes(c.id);
+      return ms && mf;
+    })
+    .sort((a, b) => {
+      const score = (c) => (c.urgent ? 2 : 0) + (c.blockedBy === "client" ? 1 : 0);
+      return score(b) - score(a) || a.step - b.step || a.name.localeCompare(b.name);
+    });
 
   // Group by company for workspace view
   const companies = [...new Set(clients.map(c => c.company).filter(Boolean))];
   const standalone = filtered.filter(c => !c.company);
   const grouped    = companies.map(co => ({ company:co, clients: filtered.filter(c => c.company===co) })).filter(g => g.clients.length);
-
-  const WorkspaceTag = ({ label }) => (
-    <div style={{ display:"flex", alignItems:"center", gap:5, padding:"4px 10px", background:"#f6f6f6", border:"1px solid #e8e8e8", borderRadius:7, cursor:"pointer" }}>
-      <span style={{ fontSize:11, color:"#555555", fontWeight:500 }}>{label}</span>
-      <span style={{ fontSize:10, color:"#c0c0c0" }}>›</span>
-    </div>
-  );
+  const getTaxTypeLabel = (c) => {
+    if (c.type === "Entity") {
+      const taxCode = c.workspaces.find((w) => /^\d/.test(w))?.split("—")[0]?.trim();
+      return taxCode ? `Tax ${taxCode}` : "Entity tax";
+    }
+    return `Tax ${c.type}`;
+  };
+  const getBlockerChip = (c) => {
+    if (c.blockedBy !== "client") return null;
+    const critical = c.urgent || c.risk === "high";
+    return critical
+      ? { label:"Critical blocker", bg:"#f9f0f0", color:"#a76b6b", border:"#ead9d9" }
+      : { label:"Blocker", bg:"#faf6eb", color:"#8b7a4b", border:"#eee4cb" };
+  };
+  const ClientMetaChips = ({ c, compact=false }) => {
+    const blocker = getBlockerChip(c);
+    const padding = compact ? "1px 8px" : "2px 8px";
+    const fontSize = compact ? 10 : 11;
+    return (
+      <div style={{ display:"flex", alignItems:"center", gap:6, marginTop: compact ? 2 : 3, flexWrap:"wrap" }}>
+        <span style={{ fontSize, fontWeight:600, color:"#5f6677", background:"#f3f5f9", border:"1px solid #e5e9f2", borderRadius:999, padding, lineHeight:1.4 }}>
+          {getTaxTypeLabel(c)}
+        </span>
+        {blocker && (
+          <span style={{ fontSize, fontWeight:600, color:blocker.color, background:blocker.bg, border:`1px solid ${blocker.border}`, borderRadius:999, padding, lineHeight:1.4 }}>
+            {blocker.label}
+          </span>
+        )}
+      </div>
+    );
+  };
 
   const ClientCardClient = ({ c }) => (
     <div onClick={() => go(S.CLIENT_DETAIL, { client:c })} style={{ background:"#fff", border:`1px solid ${c.urgent?"#c8c8c8":"#d8d8d8"}`, borderRadius:14, padding:13, marginBottom:10, cursor:"pointer" }}>
@@ -1966,31 +2532,19 @@ function ClientsScreen({ go, clients, reminded, remind }) {
           <div style={{ width:34, height:34, borderRadius:99, background:"#f0f0f0", color:"#2d2d2d", display:"flex", alignItems:"center", justifyContent:"center", fontWeight:700, fontSize:13 }}>{c.name[0]}</div>
           <div>
             <div style={{ fontWeight:700, fontSize:14, color:"#1a1a1a" }}>{c.name}</div>
-            <div style={{ display:"flex", gap:4, alignItems:"center", marginTop:1 }}><TypeBadge type={c.type} /></div>
+            <ClientMetaChips c={c} />
           </div>
         </div>
         <div style={{ display:"flex", alignItems:"center", gap:6 }}><RiskDot risk={c.risk} /><span style={{ color:"#c0c0c0", fontSize:13 }}>›</span></div>
       </div>
       {/* Progress */}
-      <div style={{ marginBottom: c.workspaces.length ? 8 : 0 }}>
+      <div>
         <div style={{ display:"flex", justifyContent:"space-between", marginBottom:3 }}>
           <span style={{ fontSize:11, color:"#777777" }}>{c.stepLabel}</span>
           <span style={{ fontSize:11, color:"#777777" }}>{c.step}/{c.steps}</span>
         </div>
         <StepBar step={c.step} total={c.steps} />
       </div>
-      {/* Workspaces */}
-      <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
-        {c.workspaces.map(w => <WorkspaceTag key={w} label={w} />)}
-      </div>
-      {c.blockedBy === "client" && (
-        <div style={{ marginTop:9, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-          <span style={{ fontSize:11, color:"#666666", fontWeight:600 }}>⚠ Waiting on client</span>
-          <button onClick={e => { e.stopPropagation(); remind(c.id); }} style={{ border:"none", borderRadius:8, padding:"4px 10px", fontSize:11, fontWeight:700, cursor:"pointer", background: reminded.includes(c.id)?"#e8e8e8":UI.brand, color: reminded.includes(c.id)?"#4a4a4a":"#fff" }}>
-            {reminded.includes(c.id) ? "✓ Sent" : "Send Reminder"}
-          </button>
-        </div>
-      )}
     </div>
   );
 
@@ -2012,22 +2566,15 @@ function ClientsScreen({ go, clients, reminded, remind }) {
           {groupClients.map((c, ci) => (
             <div key={c.id} style={{ borderBottom: ci < groupClients.length-1 ? "1px solid #f0f0f0" : "none" }}>
               {/* Client row */}
-              <div onClick={() => go(S.CLIENT_DETAIL, { client:c })} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"10px 14px 6px", cursor:"pointer" }}>
+              <div onClick={() => go(S.CLIENT_DETAIL, { client:c })} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"10px 14px", cursor:"pointer" }}>
                 <div style={{ display:"flex", alignItems:"center", gap:8 }}>
                   <div style={{ width:28, height:28, borderRadius:99, background:"#f0f0f0", color:"#2d2d2d", display:"flex", alignItems:"center", justifyContent:"center", fontWeight:700, fontSize:11, flexShrink:0 }}>{c.name[0]}</div>
                   <div>
                     <div style={{ fontWeight:600, fontSize:13, color:"#1a1a1a" }}>{c.name}</div>
-                    <div style={{ display:"flex", gap:5, alignItems:"center", marginTop:1 }}>
-                      <TypeBadge type={c.type} />
-                      {c.blockedBy==="client" && <span style={{ fontSize:9, color:"#888888", fontWeight:600 }}>⚠ waiting</span>}
-                    </div>
+                    <ClientMetaChips c={c} compact />
                   </div>
                 </div>
                 <div style={{ display:"flex", alignItems:"center", gap:5 }}><RiskDot risk={c.risk} /><span style={{ color:"#c0c0c0", fontSize:13 }}>›</span></div>
-              </div>
-              {/* Workspace chips */}
-              <div style={{ display:"flex", gap:5, flexWrap:"wrap", padding:"2px 14px 10px 50px" }}>
-                {c.workspaces.map(w => <WorkspaceTag key={w} label={w} />)}
               </div>
             </div>
           ))}
@@ -2038,42 +2585,58 @@ function ClientsScreen({ go, clients, reminded, remind }) {
 
   const StandaloneCard = ({ c }) => (
     <div style={{ background:"#fff", border:"1px solid #d8d8d8", borderRadius:14, overflow:"hidden", marginBottom:10 }}>
-      <div onClick={() => go(S.CLIENT_DETAIL, { client:c })} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"12px 14px 8px", cursor:"pointer" }}>
+      <div onClick={() => go(S.CLIENT_DETAIL, { client:c })} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"12px 14px", cursor:"pointer" }}>
         <div style={{ display:"flex", alignItems:"center", gap:9 }}>
           <div style={{ width:34, height:34, borderRadius:99, background:"#f0f0f0", color:"#2d2d2d", display:"flex", alignItems:"center", justifyContent:"center", fontWeight:700, fontSize:13, flexShrink:0 }}>{c.name[0]}</div>
           <div>
             <div style={{ fontWeight:600, fontSize:13, color:"#1a1a1a" }}>{c.name}</div>
-            <div style={{ display:"flex", gap:5, alignItems:"center", marginTop:1 }}>
-              <TypeBadge type={c.type} />
-              {c.blockedBy==="client" && <span style={{ fontSize:9, color:"#888888", fontWeight:600 }}>⚠ waiting</span>}
-            </div>
+            <ClientMetaChips c={c} />
           </div>
         </div>
         <div style={{ display:"flex", alignItems:"center", gap:5 }}><RiskDot risk={c.risk} /><span style={{ color:"#c0c0c0", fontSize:13 }}>›</span></div>
-      </div>
-      <div style={{ display:"flex", gap:5, flexWrap:"wrap", padding:"2px 14px 10px" }}>
-        {c.workspaces.map(w => <WorkspaceTag key={w} label={w} />)}
       </div>
     </div>
   );
 
   return (
     <div style={{ flex:1 }}>
-      <Header title="Clients" sub={`${clients.length} active`} search={q} onSearch={setQ} searchPh="Search clients or workspaces..." />
+      <Header title="Clients" sub={`${clients.length} active`} search={q} onSearch={setQ} onSearchTap={() => go(S.GLOBAL_SEARCH, { source:S.CLIENTS, initialQuery:q })} searchPh="Search clients or workspaces..." />
 
       {/* Controls row */}
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"10px 18px 4px" }}>
         {/* Filters */}
         <div style={{ display:"flex", gap:6 }}>
-          {["All","Favorites","Urgent"].map(x => (
+          {["Recent","My clients","All"].map(x => (
             <button key={x} onClick={() => setF(x)} style={{ border:"none", borderRadius:99, padding:"5px 11px", fontSize:11, fontWeight:600, cursor:"pointer", background: f===x?"#2d2d2d":"#f2f2f2", color: f===x?"#fff":"#777777" }}>{x}</button>
           ))}
         </div>
-        {/* View switcher */}
-        <div style={{ display:"flex", background:"#f2f2f2", borderRadius:8, padding:2, gap:1 }}>
-          {[{id:"client",label:"Client"},{id:"workspace",label:"Workspace"}].map(v => (
-            <button key={v.id} onClick={() => setView(v.id)} style={{ border:"none", borderRadius:6, padding:"4px 10px", fontSize:11, fontWeight:600, cursor:"pointer", background: view===v.id?"#fff":"transparent", color: view===v.id?"#1a1a1a":"#999999", boxShadow: view===v.id?"0 1px 3px rgba(0,0,0,0.1)":"none", transition:"all 0.15s" }}>{v.label}</button>
-          ))}
+        {/* Compact controls */}
+        <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+          <button
+            onClick={() => setView(view === "client" ? "workspace" : "client")}
+            title={view === "client" ? "Switch to workspace view" : "Switch to client view"}
+            style={{
+              minWidth:90,
+              height:30,
+              borderRadius:999,
+              border:"1px solid #dce1eb",
+              background:"#fff",
+              color:"#2a3550",
+              display:"inline-flex",
+              alignItems:"center",
+              justifyContent:"center",
+              gap:6,
+              fontSize:10.5,
+              fontWeight:700,
+              padding:"0 10px",
+              cursor:"pointer",
+            }}
+          >
+            <span>{view === "client" ? "Client" : "Workspace"}</span>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <path d="M7 7h10M7 17h10M14 4l3 3-3 3M10 14l-3 3 3 3" />
+            </svg>
+          </button>
         </div>
       </div>
 
@@ -3158,7 +3721,7 @@ function MessagingScreen({ go, chats, chatUnread, chatMsgs, openChat }) {
 
   return (
     <div style={{ flex:1 }}>
-      <Header title="Messages" sub={`${chats.length} conversations`} search={q} onSearch={setQ} searchPh="Search..." />
+      <Header title="Messages" sub={`${chats.length} conversations`} search={q} onSearch={setQ} onSearchTap={() => go(S.GLOBAL_SEARCH, { source:S.MESSAGING, initialQuery:q })} searchPh="Search..." />
 
       <div style={{ paddingTop:12 }}>
         {internal.length > 0 && (
@@ -3328,7 +3891,7 @@ function DMSScreen({ go, docs }) {
 
   return (
     <div style={{ flex:1, background:UI.surface, display:"flex", flexDirection:"column" }}>
-      <Header title="Documents" sub={`${docs.length} files`} search={q} onSearch={setQ} searchPh="Search files..." />
+      <Header title="Documents" sub={`${docs.length} files`} search={q} onSearch={setQ} onSearchTap={() => go(S.GLOBAL_SEARCH, { source:S.DOCUMENTS, initialQuery:q })} searchPh="Search files..." />
 
       <div style={{ padding:"0 16px", background:UI.surface }}>
         <div style={{ display:"flex", gap:18, overflowX:"auto", scrollbarWidth:"none", borderBottom:"1px solid #d9dce3" }}>
@@ -3461,6 +4024,7 @@ function StaffingScreen({ go, clients }) {
         onBack={() => go(S.HOME)}
         search={q}
         onSearch={setQ}
+        onSearchTap={() => go(S.GLOBAL_SEARCH, { source:S.STAFFING, initialQuery:q })}
         searchPh="Search client, workflow, partner..."
       />
 
@@ -3504,10 +4068,27 @@ function StaffingScreen({ go, clients }) {
                     <div style={{ fontSize:10, color:"#999999", marginTop:1 }}>{row.status}</div>
                   </div>
                   <div style={{ padding:"10px", minWidth:0 }}>
-                    <div style={{ display:"flex", alignItems:"center", gap:6 }}>
-                      <div style={{ width:4, height:15, borderRadius:99, background:row.workflowColor, flexShrink:0 }} />
-                      <span style={{ fontSize:11, color:"#3f3f3f", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{row.workflow}</span>
-                    </div>
+                    <span
+                      style={{
+                        display:"inline-flex",
+                        alignItems:"center",
+                        gap:6,
+                        fontSize:10.5,
+                        fontWeight:600,
+                        color:"#4a556b",
+                        background:`${row.workflowColor}16`,
+                        border:`1px solid ${row.workflowColor}66`,
+                        borderRadius:999,
+                        padding:"3px 8px",
+                        whiteSpace:"nowrap",
+                        overflow:"hidden",
+                        textOverflow:"ellipsis",
+                        maxWidth:"100%",
+                      }}
+                    >
+                      <span style={{ width:6, height:6, borderRadius:99, background:row.workflowColor, flexShrink:0 }} />
+                      {row.workflow}
+                    </span>
                   </div>
                   <div style={{ padding:"10px", fontSize:11, color:"#3f3f3f", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{row.partner}</div>
                   <div style={{ padding:"10px", fontSize:11, color:"#3f3f3f", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{row.office}</div>
