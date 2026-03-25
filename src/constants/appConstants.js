@@ -25,7 +25,7 @@ export const S = {
   AUDIT_LOG: "audit_log",
 };
 
-export const TAB = { HOME: "home", CLIENTS: "clients", STAFFING: "staffing", MESSAGING: "messaging", DOCUMENTS: "dms" };
+export const TAB = { HOME: "home", CLIENTS: "clients", MESSAGING: "messaging", DOCUMENTS: "dms" };
 
 export const UI = {
   brand: "#0a3d86",

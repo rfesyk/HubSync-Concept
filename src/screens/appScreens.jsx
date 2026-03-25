@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { S, UI, stepLabels } from "../constants/appConstants";
-import { staffingReviewNotes } from "../data/mockData";
+import { staffingReviewNotes, pendingItemsById, assignedStaffById, activityById } from "../data/mockData";
 import { buildStaffingRows, buildStaffingSummary } from "../utils/staffing";
 import {
   Btn,
@@ -2004,22 +2004,25 @@ export function ClientsScreen({ go, clients, reminded, remind }) {
 // ══════════════════════════════════════════════════════════════════
 // CLIENT DETAIL
 // ══════════════════════════════════════════════════════════════════
-export function ClientDetailScreen({ go, ctx, docs, chats, reminded, remind }) {
+export function ClientDetailScreen({ go, ctx, docs, chats, extensions, reminded, remind }) {
   const c = ctx.client; if (!c) return null;
-  const [detailTab, setDetailTab] = useState("Information");
+  const [detailTab, setDetailTab] = useState("Notes");
   const backTarget = ctx?.from === S.HOME ? S.HOME : ctx?.from === S.STAFFING ? S.STAFFING : S.CLIENTS;
   const clientDocs = docs.filter(d => d.client === c.name);
   const clientReviewNotes = staffingReviewNotes
     .filter((n) => n.clientId === c.id)
     .sort((a, b) => (a.status === "Open" ? 0 : 1) - (b.status === "Open" ? 0 : 1));
-  const addressById = {
-    1:"2118 Thorn-ridge Cir, Syracuse, Connecticut, San Jose, CA",
-    2:"530 W Monroe St, Chicago, IL",
-    3:"100 Main St, Denver, CO",
-    4:"1400 Grand Blvd, Detroit, MI",
-    5:"15 Lake Shore Dr, Chicago, IL",
-    6:"900 South Blvd, Charlotte, NC",
-  };
+  const clientExtensions = (extensions || []).filter(e => e.client === c.name);
+  const pendingItems = pendingItemsById[c.id] || [];
+  const staff = assignedStaffById[c.id] || { partner:"—", preparer:"—", reviewer:"—" };
+  const activity = activityById[c.id] || [];
+  // Deadline logic: if any extension is filed → Oct 15, else Apr 15
+  const hasFiledExtension = clientExtensions.some(e => e.status === "filed");
+  const hasPendingExtension = clientExtensions.some(e => e.status === "pending");
+  const hasRejectedExtension = clientExtensions.some(e => e.status === "rejected");
+  const deadlineDate = hasFiledExtension ? "Oct 15, 2025" : "Apr 15, 2025";
+  const deadlineDaysLeft = hasFiledExtension ? 204 : 21;
+
   const contactById = {
     1:{ email:"johndoe@mail.com", phone:"+1 (22)-789-907" },
     2:{ email:"tax@umbrellacorp.com", phone:"+1 (312)-555-0142" },
@@ -2027,12 +2030,6 @@ export function ClientDetailScreen({ go, ctx, docs, chats, reminded, remind }) {
     4:{ email:"finance@xyzco.com", phone:"+1 (313)-555-0192" },
     5:{ email:"drake.maye@mail.com", phone:"+1 (312)-555-0104" },
     6:{ email:"sarah.connor@mail.com", phone:"+1 (704)-555-0168" },
-  };
-  const locationById = {
-    1:"San Jose, CA", 2:"Chicago, IL", 3:"Denver, CO", 4:"Detroit, MI", 5:"Chicago, IL", 6:"Charlotte, NC",
-  };
-  const sourceById = {
-    1:"Client Portal", 2:"Business Portal", 3:"Trust Workspace", 4:"Entity Workspace", 5:"Mobile Upload", 6:"Mobile Upload",
   };
   const responsivenessById = {
     1: { status:"Stable", avgDays:2, bars:[3,2,4,2,3] },
@@ -2043,9 +2040,9 @@ export function ClientDetailScreen({ go, ctx, docs, chats, reminded, remind }) {
     6: { status:"Stable", avgDays:2, bars:[3,3,4,3,4] },
   };
   const tabs = [
-    { key:"Information", label:"Information" },
-    { key:"Notes", label:`Notes (${clientReviewNotes.length})` },
+    { key:"Notes",     label:`Notes (${clientReviewNotes.length})` },
     { key:"Documents", label:`Documents (${clientDocs.length})` },
+    { key:"Activity",  label:"Activity" },
   ];
   const stepIndicatorLabel = c.stepLabel === "Upload Docs" ? "Upload Documents" : c.stepLabel;
   const responsiveness = responsivenessById[c.id] || { status:"Stable", avgDays:2, bars:[3,2,4,2,3] };
@@ -2061,138 +2058,118 @@ export function ClientDetailScreen({ go, ctx, docs, chats, reminded, remind }) {
   };
   const isReminded = reminded?.includes?.(c.id);
 
+  const activityIcon = (type) => {
+    if (type === "upload")   return { icon:"↑", bg:"#e8f0ff", color:"#1e66f5" };
+    if (type === "message")  return { icon:"✉", bg:"#e8f5ec", color:"#1a7f3c" };
+    if (type === "reminder") return { icon:"🔔", bg:"#fff5e8", color:"#c07000" };
+    if (type === "status")   return { icon:"→", bg:"#f2f4f8", color:"#4b5563" };
+    if (type === "el")       return { icon:"✍", bg:"#f3eeff", color:"#7c3aed" };
+    return { icon:"·", bg:"#f2f4f8", color:"#6b7280" };
+  };
+
+  const extStatusStyle = (status) => {
+    if (status === "filed")    return { color:"#166534", bg:"#dcfce7", border:"#86efac" };
+    if (status === "pending")  return { color:"#92400e", bg:"#fef3c7", border:"#fcd34d" };
+    if (status === "rejected") return { color:"#991b1b", bg:"#fee2e2", border:"#fca5a5" };
+    return { color:"#374151", bg:"#f3f4f6", border:"#d1d5db" };
+  };
+
   return (
     <div style={{ flex:1 }}>
-      <Header title={c.name} sub={`${c.stepLabel} · Step ${c.step}/${c.steps}`} back onBack={() => go(backTarget)} />
+      <Header back onBack={() => go(backTarget)} />
       <div style={{ padding:"12px 18px 20px" }}>
-        <div style={{ background:"#fff", border:"1px solid #e3e8f2", borderRadius:14, padding:"12px", marginBottom:12 }}>
-          <div style={{ display:"flex", alignItems:"flex-start", gap:10 }}>
-            <div style={{ width:48, height:48, borderRadius:99, background:"#e8edf7", color:"#1e66f5", display:"flex", alignItems:"center", justifyContent:"center", fontSize:20, fontWeight:800, flexShrink:0 }}>{c.name[0]}</div>
-            <div style={{ flex:1, minWidth:0 }}>
-              <div style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" }}>
-                <span style={{ fontSize:14, fontWeight:700, color:"#161a24", lineHeight:1.1 }}>{c.type}</span>
-                <span style={{ fontSize:11, fontWeight:600, color:"#3a8d49", background:"#e8f7ec", borderRadius:999, padding:"2px 8px" }}>Active</span>
-              </div>
-              <div style={{ marginTop:5, fontSize:12, color:"#6d7586" }}>
-                {locationById[c.id] || "Chicago, IL"} · {sourceById[c.id] || "Client Portal"}
-              </div>
-            </div>
-          </div>
 
-          <div style={{ borderTop:"1px solid #edf1f7", marginTop:10, paddingTop:10 }}>
-            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
-              <div style={{ fontSize:14, fontWeight:700, color:"#161a24" }}>{stepIndicatorLabel}</div>
-              <div style={{ fontSize:12, color:"#6d7586" }}>Step {c.step}/{c.steps}</div>
+        {/* ── Card 1: Identity + Info ── */}
+        <div style={{ background:"#fff", border:"1px solid #e3e8f2", borderRadius:14, overflow:"hidden", marginBottom:10 }}>
+          {/* Avatar + name + contact */}
+          <div style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 14px", borderBottom:"1px solid #f0f2f6" }}>
+            <div style={{ width:34, height:34, borderRadius:99, background:"#e8edf7", color:"#1e66f5", display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, fontWeight:800, flexShrink:0 }}>{c.name[0]}</div>
+            <div style={{ flex:1, minWidth:0 }}>
+              <div style={{ fontSize:14, fontWeight:700, color:"#161a24", lineHeight:1.2 }}>{c.name}</div>
+              <div style={{ fontSize:11, color:"#8a94a7", marginTop:1 }}>{c.type}</div>
             </div>
-            <StepBar step={c.step} total={c.steps} />
-            <div style={{ display:"grid", gridTemplateColumns: c.blockedBy === "client" ? "1fr 1fr" : "1fr", gap:8, marginTop:12 }}>
-              <button onClick={openClientChat} style={{ border:"none", borderRadius:12, padding:"11px 10px", fontSize:12, fontWeight:700, background:"#0065FF", color:"#fff", cursor:"pointer" }}>Message</button>
-              {c.blockedBy === "client" && (
-                <button
-                  onClick={() => remind(c.id)}
-                  style={{ border:"1px solid #d5dbe7", borderRadius:12, padding:"11px 10px", fontSize:12, fontWeight:700, background:isReminded ? "#eef5ff" : "#fff", color:isReminded ? "#2158c9" : "#2e3445", cursor:"pointer" }}
-                >
-                  {isReminded ? "Reminder sent" : "Send reminder"}
-                </button>
-              )}
+            <div style={{ display:"flex", flexDirection:"column", alignItems:"flex-end", gap:3, flexShrink:0 }}>
+              <span style={{ fontSize:11, color:"#1f3f87" }}>{(contactById[c.id] || {}).email || "client@mail.com"}</span>
+              <span style={{ fontSize:11, color:"#1f3f87" }}>{(contactById[c.id] || {}).phone || "+1 (000)-000-0000"}</span>
             </div>
           </div>
+          {/* Team */}
+          {[
+            { label:"Partner",  value:staff.partner  },
+            { label:"Preparer", value:staff.preparer },
+            { label:"Reviewer", value:staff.reviewer },
+          ].map(({ label, value }) => (
+            <div key={label} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"7px 14px", borderBottom:"1px solid #f0f2f6" }}>
+              <span style={{ fontSize:11.5, color:"#8a94a7" }}>{label}</span>
+              <span style={{ fontSize:12, fontWeight:600, color:"#1a2033" }}>{value}</span>
+            </div>
+          ))}
         </div>
 
+        {/* ── Card 2: Workflow ── */}
+        {(() => {
+          const typeIcon = { form:"📋", bank:"🏦", doc:"📄", sign:"✍️" };
+          return (
+            <div style={{ background:"#fff", border:"1px solid #e3e8f2", borderRadius:14, overflow:"hidden", marginBottom:12 }}>
+              {/* Step */}
+              <div style={{ padding:"12px 14px", borderBottom:"1px solid #f0f2f6" }}>
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
+                  <span style={{ fontSize:13, fontWeight:600, color:"#1a2033" }}>{stepIndicatorLabel}</span>
+                  <span style={{ fontSize:11, color:"#9ca3af" }}>Step {c.step}/{c.steps}</span>
+                </div>
+                <StepBar step={c.step} total={c.steps} />
+              </div>
+              {/* Deadline */}
+              <div style={{ padding:"10px 14px", borderBottom: (clientExtensions.length > 0 || (c.blockedBy === "client" && pendingItems.length > 0)) ? "1px solid #f0f2f6" : "none", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                <span style={{ fontSize:12, color:"#8a94a7" }}>{clientExtensions.length > 0 ? "Extended deadline" : "Filing deadline"}</span>
+                <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                  <span style={{ fontSize:12.5, fontWeight:600, color: deadlineDaysLeft <= 30 ? "#b45309" : "#1a2033" }}>{deadlineDate}</span>
+                  <span style={{ fontSize:10, fontWeight:700, color: deadlineDaysLeft <= 30 ? "#d97706" : "#4b6fca", background: deadlineDaysLeft <= 30 ? "#fff3cd" : "#eef1fb", borderRadius:5, padding:"2px 6px" }}>{deadlineDaysLeft}d</span>
+                </div>
+              </div>
+              {/* Extensions */}
+              {clientExtensions.length > 0 && (
+                <div style={{ padding:"9px 14px", borderBottom: c.blockedBy === "client" && pendingItems.length > 0 ? "1px solid #f0f2f6" : "none", display:"flex", flexWrap:"wrap", gap:5 }}>
+                  {clientExtensions.map((ext) => {
+                    const s = extStatusStyle(ext.status);
+                    return (
+                      <span key={ext.id} style={{ fontSize:10, fontWeight:700, color:s.color, background:s.bg, border:`1px solid ${s.border}`, borderRadius:5, padding:"2px 7px" }}>
+                        {ext.jurisdiction} · {ext.status}
+                      </span>
+                    );
+                  })}
+                </div>
+              )}
+              {/* Documents needed */}
+              {c.blockedBy === "client" && pendingItems.length > 0 && pendingItems.map((item, i) => (
+                <div key={i} style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 14px", borderBottom:"1px solid #f0f2f6" }}>
+                  <div style={{ width:30, height:30, borderRadius:8, background:"#f7f9ff", display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, flexShrink:0 }}>
+                    {typeIcon[item.type] || "📄"}
+                  </div>
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ fontSize:12.5, fontWeight:600, color:"#1a2033" }}>{item.label}</div>
+                    <div style={{ fontSize:11, color:"#9ca3af", marginTop:1 }}>{item.desc}</div>
+                  </div>
+                  <div style={{ width:15, height:15, borderRadius:99, border:"1.5px solid #d1d5db", flexShrink:0 }} />
+                </div>
+              ))}
+            </div>
+          );
+        })()}
+
+        {/* ── Tabs ── */}
         <div style={{ display:"flex", gap:16, overflowX:"auto", borderBottom:"1px solid #e6e9ef", marginBottom:12, scrollbarWidth:"none" }}>
           {tabs.map((tab) => {
             const active = detailTab === tab.key;
             return (
-              <button
-                key={tab.key}
-                onClick={() => setDetailTab(tab.key)}
-                style={{
-                  border:"none",
-                  background:"transparent",
-                  fontSize:12.5,
-                  color: active ? "#171b24" : "#70798b",
-                  fontWeight: active ? 700 : 500,
-                  padding:"0 0 10px",
-                  borderBottom: active ? "2px solid #f28b2e" : "2px solid transparent",
-                  marginBottom:-1,
-                  whiteSpace:"nowrap",
-                  cursor:"pointer",
-                }}
-              >
+              <button key={tab.key} onClick={() => setDetailTab(tab.key)} style={{ border:"none", background:"transparent", fontSize:12.5, color: active ? "#171b24" : "#70798b", fontWeight: active ? 700 : 500, padding:"0 0 10px", borderBottom: active ? "2px solid #f28b2e" : "2px solid transparent", marginBottom:-1, whiteSpace:"nowrap", cursor:"pointer" }}>
                 {tab.label}
               </button>
             );
           })}
         </div>
 
-        {detailTab === "Information" && (
-          <>
-            <div style={{ background:"#fff", border:"1px solid #e6e9ef", borderRadius:12, padding:"12px 12px", marginBottom:12 }}>
-              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:6 }}>
-                <div style={{ fontSize:15, fontWeight:700, color:"#161a24" }}>Filing Address</div>
-                <button style={{ border:"none", background:"none", fontSize:13, fontWeight:600, color:"#161a24", cursor:"pointer", textDecoration:"underline" }}>Edit</button>
-              </div>
-              <div style={{ fontSize:12.5, color:"#2e3445", lineHeight:1.4, marginBottom:8 }}>{addressById[c.id] || "Address unavailable"}</div>
-              <div style={{ height:130, borderRadius:10, border:"1px solid #e6e9ef", background:"#f2f4f8", display:"flex", alignItems:"center", justifyContent:"center", fontSize:12, color:"#9ca4b5" }}>Map</div>
-            </div>
-
-            <div style={{ background:"#fff", border:"1px solid #e6e9ef", borderRadius:12, padding:"12px 12px", marginBottom:12 }}>
-              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
-                <div style={{ fontSize:15, fontWeight:700, color:"#161a24" }}>Contact Information</div>
-                <button style={{ border:"none", background:"none", fontSize:13, fontWeight:600, color:"#161a24", cursor:"pointer", textDecoration:"underline" }}>Edit</button>
-              </div>
-              <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
-                <span style={{ alignSelf:"flex-start", fontSize:13, color:"#1f3f87", border:"1px solid #97b7ff", borderRadius:10, padding:"7px 12px" }}>{(contactById[c.id] || {}).email || "client@mail.com"}</span>
-                <span style={{ alignSelf:"flex-start", fontSize:13, color:"#1f3f87", border:"1px solid #97b7ff", borderRadius:10, padding:"7px 12px" }}>{(contactById[c.id] || {}).phone || "+1 (000)-000-0000"}</span>
-              </div>
-            </div>
-
-            <div style={{ background:"#fff", border:"1px solid #e6e9ef", borderRadius:12, padding:"12px 12px", marginBottom:12 }}>
-              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:8, marginBottom:10 }}>
-                <div style={{ fontSize:12, fontWeight:700, color:"#8a94a7", letterSpacing:1.2, textTransform:"uppercase" }}>Responsiveness</div>
-                <span style={{ fontSize:11, fontWeight:700, color:statusTone.color, background:statusTone.bg, border:`1px solid ${statusTone.border}`, borderRadius:9, padding:"3px 10px" }}>
-                  {responsiveness.status}
-                </span>
-              </div>
-
-              <div style={{ display:"grid", gridTemplateColumns:"repeat(5, minmax(0, 1fr))", gap:4, alignItems:"end", height:56, marginBottom:9 }}>
-                {responsiveness.bars.map((v, i) => (
-                  <div
-                    key={i}
-                    style={{
-                      height: `${18 + v * 8}px`,
-                      borderRadius:"5px 5px 0 0",
-                      background: i === responsiveness.bars.length - 1 ? "#2f2f34" : "#c7c8cc",
-                    }}
-                  />
-                ))}
-              </div>
-
-              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", gap:8 }}>
-                <span style={{ fontSize:10.5, color:"#8a8a8a" }}>Last 5 interactions</span>
-                <span style={{ fontSize:17, fontWeight:700, color:"#2f2f34" }}>
-                  Avg {responsiveness.avgDays}d response
-                </span>
-              </div>
-            </div>
-
-            <div style={{ background:"#fff", border:"1px solid #e6e9ef", borderRadius:12, padding:"4px 12px" }}>
-              {[
-                { title:"Tax Category", subtitle:c.type, action:"+ Add" },
-                { title:"Client Note", subtitle:"No note", action:"+ Add" },
-              ].map((item, idx) => (
-                <div key={item.title} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding: idx === 0 ? "10px 0" : "12px 0 10px", borderTop: idx === 1 ? "1px solid #edf0f6" : "none" }}>
-                  <div>
-                    <div style={{ fontSize:14, fontWeight:600, color:"#161a24" }}>{item.title}</div>
-                    <div style={{ fontSize:12, color:"#7d8596", marginTop:2 }}>{item.subtitle}</div>
-                  </div>
-                  <button style={{ border:"none", background:"none", fontSize:13, fontWeight:600, color:"#161a24", cursor:"pointer", textDecoration:"underline" }}>{item.action}</button>
-                </div>
-              ))}
-            </div>
-          </>
-        )}
-
+        {/* ── Notes tab ── */}
         {detailTab === "Notes" && (
           <div style={{ display:"flex", flexDirection:"column", gap:8, marginBottom:12 }}>
             {clientReviewNotes.map((note) => {
@@ -2231,6 +2208,7 @@ export function ClientDetailScreen({ go, ctx, docs, chats, reminded, remind }) {
           </div>
         )}
 
+        {/* ── Documents tab ── */}
         {detailTab === "Documents" && (
           <div style={{ background:"#fff", borderRadius:12, padding:"12px 14px", border:"1px solid #e2e6ef" }}>
             <div style={{ fontSize:10, fontWeight:700, color:"#999999", letterSpacing:1.5, marginBottom:10 }}>DOCUMENTS</div>
@@ -2244,6 +2222,41 @@ export function ClientDetailScreen({ go, ctx, docs, chats, reminded, remind }) {
                 {d.status && <StatusPill status={d.status} />}
               </div>
             ))}
+            {clientDocs.length === 0 && (
+              <div style={{ fontSize:12, color:"#8a94a7" }}>No documents yet.</div>
+            )}
+          </div>
+        )}
+
+        {/* ── Activity tab ── */}
+        {detailTab === "Activity" && (
+          <div style={{ display:"flex", flexDirection:"column", gap:0 }}>
+            {activity.length === 0 && (
+              <div style={{ background:"#fff", border:"1px solid #e6e9ef", borderRadius:12, padding:"12px", fontSize:12, color:"#8a94a7" }}>
+                No recent activity.
+              </div>
+            )}
+            {activity.map((item, i) => {
+              const ic = activityIcon(item.type);
+              const isLast = i === activity.length - 1;
+              return (
+                <div key={item.id} style={{ display:"flex", gap:10, position:"relative" }}>
+                  {/* vertical line */}
+                  {!isLast && (
+                    <div style={{ position:"absolute", left:15, top:30, width:2, height:"calc(100% - 14px)", background:"#e6e9ef" }} />
+                  )}
+                  {/* icon */}
+                  <div style={{ width:30, height:30, borderRadius:99, background:ic.bg, color:ic.color, display:"flex", alignItems:"center", justifyContent:"center", fontSize:12, fontWeight:700, flexShrink:0, zIndex:1, border:"2px solid #fff" }}>
+                    {ic.icon}
+                  </div>
+                  {/* content */}
+                  <div style={{ flex:1, paddingBottom: isLast ? 0 : 16 }}>
+                    <div style={{ fontSize:12.5, fontWeight:500, color:"#1e2d4a", lineHeight:1.35 }}>{item.text}</div>
+                    <div style={{ fontSize:10.5, color:"#8a94a7", marginTop:2 }}>{item.time}</div>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
       </div>

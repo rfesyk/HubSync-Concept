@@ -23,7 +23,6 @@ import {
   MySignaturesScreen,
   SettingsScreen,
   SignDocScreen,
-  StaffingScreen,
 } from "./screens/appScreens";
 
 export default function App() {
@@ -54,20 +53,20 @@ export default function App() {
   const totalUnread = Object.values(chatUnread).reduce((a,b) => a+b, 0);
 
   const go = (s, data={}) => {
+    const nextScreen = s === S.STAFFING ? S.CLIENTS : s;
     setCtx(data);
-    setScreen(s);
+    setScreen(nextScreen);
     const screenToTab = {
       [S.HOME]: TAB.HOME,
       [S.CLIENTS]: TAB.CLIENTS,
-      [S.STAFFING]: TAB.STAFFING,
       [S.MESSAGING]: TAB.MESSAGING,
       [S.DOCUMENTS]: TAB.DOCUMENTS,
     };
-    if (screenToTab[s]) setTab(screenToTab[s]);
+    if (screenToTab[nextScreen]) setTab(screenToTab[nextScreen]);
   };
   const goTab = (t) => {
     setTab(t);
-    const map = { [TAB.HOME]:S.HOME, [TAB.CLIENTS]:S.CLIENTS, [TAB.STAFFING]:S.STAFFING, [TAB.MESSAGING]:S.MESSAGING, [TAB.DOCUMENTS]:S.DOCUMENTS };
+    const map = { [TAB.HOME]:S.HOME, [TAB.CLIENTS]:S.CLIENTS, [TAB.MESSAGING]:S.MESSAGING, [TAB.DOCUMENTS]:S.DOCUMENTS };
     setScreen(map[t]);
   };
 
@@ -226,7 +225,7 @@ export default function App() {
   }, [screen]);
 
   const screenProps = { go, goTab, clients, signatures, forms8879, extensions, chats, docs, auditLog, signed, reminded, remind, undoRemind, sign, chatMsgs, chatUnread, openChat, openTopic, sendMsg, ctx, pendingResolve, resolveOnReturn, clearPendingResolve, showToast, hideToast, setOverlayOpen, homeSearch, setHomeSearch };
-  const showTabChrome = [S.HOME, S.CLIENTS, S.MESSAGING, S.DOCUMENTS].includes(screen) || (screen === S.STAFFING && ctx?.mode !== "table");
+  const showTabChrome = [S.HOME, S.CLIENTS, S.MESSAGING, S.DOCUMENTS].includes(screen);
 
   return (
     <div style={{ minHeight:"100vh", background:"#c0c0c0", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"'Segoe UI',system-ui,sans-serif" }}>
@@ -283,7 +282,6 @@ export default function App() {
           {screen === S.MY_SIGNATURES     && <MySignaturesScreen {...screenProps} />}
           {screen === S.SIGN_DOC          && <SignDocScreen     {...screenProps} />}
           {screen === S.FORM_8879         && <Form8879Screen    {...screenProps} />}
-          {screen === S.STAFFING          && <StaffingScreen    {...screenProps} />}
           {screen === S.BATCH_EXT         && <BatchExtScreen    {...screenProps} />}
           {screen === S.BATCH_EXT_STATUS  && <BatchExtStatusScreen {...screenProps} />}
           {screen === S.METRICS            && <MetricsScreen      {...screenProps} />}

@@ -184,7 +184,6 @@ export const BottomNav = ({ tab, setTab, totalUnread }) => {
   const tabs = [
     { id:TAB.HOME,      icon:"home", label:"Home"      },
     { id:TAB.CLIENTS,   icon:"clients", label:"Clients"   },
-    { id:TAB.STAFFING,  icon:"staffing", label:"Staffing" },
     { id:TAB.MESSAGING, icon:"messages", label:"Messages", badge: totalUnread },
     { id:TAB.DOCUMENTS, icon:"documents", label:"Documents" },
   ];
@@ -214,15 +213,6 @@ export const BottomNav = ({ tab, setTab, totalUnread }) => {
       return (
         <svg {...common}>
           <path d="M4 5h16a3 3 0 0 1 3 3v7a3 3 0 0 1-3 3H9l-5 4v-4H4a3 3 0 0 1-3-3V8a3 3 0 0 1 3-3z" />
-        </svg>
-      );
-    }
-    if (name === "staffing") {
-      return (
-        <svg {...common}>
-          <rect x="4" y="11" width="3.5" height="9" rx="1.2" />
-          <rect x="10.25" y="7" width="3.5" height="13" rx="1.2" />
-          <rect x="16.5" y="4" width="3.5" height="16" rx="1.2" />
         </svg>
       );
     }

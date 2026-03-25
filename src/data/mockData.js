@@ -200,3 +200,102 @@ export const staffingReviewNotes = [
     clientId: 4,
   },
 ];
+
+// type: "form" | "bank" | "doc" | "sign"
+export const pendingItemsById = {
+  1: [
+    { type:"form", label:"W-2",                  desc:"Wages & tax withheld from employer" },
+    { type:"form", label:"1099-INT",              desc:"Interest income · Chase Bank" },
+    { type:"doc",  label:"Mortgage statement",    desc:"Interest paid in 2024" },
+  ],
+  2: [
+    { type:"doc",  label:"Payroll summary",       desc:"Q4 2024 · all employees" },
+    { type:"bank", label:"Bank statements",       desc:"Oct – Dec 2024" },
+    { type:"doc",  label:"Fixed asset schedule",  desc:"Year-end additions & disposals" },
+  ],
+  3:  [],
+  4: [
+    { type:"sign", label:"Engagement letter",     desc:"Signature required to proceed" },
+    { type:"doc",  label:"Prior year return",     desc:"2023 filed copy (PDF)" },
+  ],
+  5: [
+    { type:"doc",  label:"Tax organizer",         desc:"Complete & return the questionnaire" },
+    { type:"form", label:"1099-B",                desc:"Brokerage sales & proceeds" },
+    { type:"doc",  label:"Estimated payments",    desc:"Records of 2024 quarterly payments" },
+  ],
+  6: [
+    { type:"sign", label:"Form 8879",             desc:"E-file authorization signature" },
+  ],
+  7: [
+    { type:"form", label:"W-2",                   desc:"Wages & tax withheld from employer" },
+    { type:"doc",  label:"Donation receipts",     desc:"Charitable contributions 2024" },
+  ],
+  8: [
+    { type:"doc",  label:"Partnership agreement", desc:"Updated version with ownership %"},
+    { type:"form", label:"K-1",                   desc:"Pass-through income from subsidiary" },
+  ],
+  9: [
+    { type:"bank", label:"Bank statements",       desc:"Q4 2024 · all accounts" },
+    { type:"doc",  label:"AP/AR aging report",    desc:"As of Dec 31, 2024" },
+    { type:"doc",  label:"Officer compensation",  desc:"Breakdown per officer for the year" },
+  ],
+  10: [
+    { type:"sign", label:"Trustee certification", desc:"2024 updated certification" },
+    { type:"bank", label:"Investment statements", desc:"Year-end account statements" },
+  ],
+  11: [
+    { type:"doc",  label:"Depreciation schedule", desc:"Updated with 2024 additions" },
+    { type:"doc",  label:"Payroll tax returns",   desc:"Q4 941 & state returns" },
+  ],
+  12: [],
+};
+
+export const assignedStaffById = {
+  1:  { partner:"Ken Yoder",         preparer:"Lisa Chen",  reviewer:"Tom Brady"         },
+  2:  { partner:"Sarah Kleinfelter", preparer:"Mike Ross",  reviewer:"Sarah Kleinfelter" },
+  3:  { partner:"Alex Reed",         preparer:"Anna Park",  reviewer:"Alex Reed"         },
+  4:  { partner:"Maya Patel",        preparer:"James Wu",   reviewer:"Kevin Hart"        },
+  5:  { partner:"Ken Yoder",         preparer:"Lisa Chen",  reviewer:"Tom Brady"         },
+  6:  { partner:"Sarah Kleinfelter", preparer:"David Kim",  reviewer:"Sarah Kleinfelter" },
+  7:  { partner:"Alex Reed",         preparer:"Anna Park",  reviewer:"Tom Brady"         },
+  8:  { partner:"Maya Patel",        preparer:"Mike Ross",  reviewer:"Kevin Hart"        },
+  9:  { partner:"Ken Yoder",         preparer:"James Wu",   reviewer:"Lisa Chen"         },
+  10: { partner:"Sarah Kleinfelter", preparer:"David Kim",  reviewer:"Sarah Kleinfelter" },
+  11: { partner:"Alex Reed",         preparer:"Anna Park",  reviewer:"Alex Reed"         },
+  12: { partner:"Maya Patel",        preparer:"Lisa Chen",  reviewer:"Kevin Hart"        },
+};
+
+export const activityById = {
+  1: [
+    { id:1, type:"upload",   text:"Client uploaded W-2 Workbook.pdf",          time:"Today, 10:23"  },
+    { id:2, type:"message",  text:"You: Sure, what would you like to know?",   time:"Today, 9:12"   },
+    { id:3, type:"reminder", text:"Reminder sent to client",                    time:"Dec 16, 14:05" },
+    { id:4, type:"status",   text:"Step advanced: Request List → Upload Docs", time:"Dec 14, 11:00" },
+    { id:5, type:"el",       text:"Engagement Letter signed by client",         time:"Dec 10, 9:30"  },
+  ],
+  2: [
+    { id:1, type:"reminder", text:"Reminder sent to client",                    time:"Today, 8:00"   },
+    { id:2, type:"status",   text:"Marked urgent by Ken Yoder",                time:"Dec 17, 15:20" },
+    { id:3, type:"el",       text:"Engagement Letter sent to client",           time:"Dec 12, 10:00" },
+  ],
+  3: [
+    { id:1, type:"status",   text:"Step advanced: Organizer → Review Return",  time:"Dec 16, 14:00" },
+    { id:2, type:"message",  text:"You: Your return is ready for review",      time:"Dec 16, 9:00"  },
+    { id:3, type:"upload",   text:"CPA uploaded 1041 Tax Return draft",        time:"Dec 15, 17:00" },
+  ],
+  4: [
+    { id:1, type:"reminder", text:"Reminder sent to client",                    time:"Today, 9:00"   },
+    { id:2, type:"status",   text:"Marked urgent by Maya Patel",               time:"Dec 16, 10:00" },
+    { id:3, type:"el",       text:"Engagement Letter sent to client",           time:"Dec 15, 14:00" },
+  ],
+  5: [
+    { id:1, type:"reminder", text:"Reminder sent to client",                    time:"Dec 17, 16:00" },
+    { id:2, type:"message",  text:"Client: Uploaded W-2 and organizer draft",  time:"Dec 16, 11:00" },
+    { id:3, type:"status",   text:"Step advanced: Request List → Organizer",   time:"Dec 14, 9:00"  },
+  ],
+  6: [
+    { id:1, type:"upload",   text:"CPA uploaded 1040 Tax Return for review",   time:"Dec 16, 15:00" },
+    { id:2, type:"message",  text:"Client: Looks correct, ready to sign",      time:"Dec 16, 15:30" },
+    { id:3, type:"status",   text:"Step advanced: Review → Sign Return",       time:"Dec 16, 14:00" },
+  ],
+};
