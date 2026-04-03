@@ -10,6 +10,6 @@ export default defineConfig({
     ],
   },
   preview: {
-    allowedHosts: ['hubsync-concept-production-cf38.up.railway.app'],
+    allowedHosts: ['hubsync-concept-production.up.railway.app'],
   },
 })
